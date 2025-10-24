@@ -23,7 +23,7 @@ Private Const CARTELLA_LAVORO As String = "_importazione_preventivi"
 ' ==============================================================================
 
 Public Sub ImportaPreventivoCompleto()
-    On Error GoTo ErrorHandler
+    ' Error handler rimosso per debug
 
     Dim zipFilePath As String
     Dim tempFolder As String
@@ -93,7 +93,7 @@ Public Sub ImportaPreventivoCompleto()
     ' Inizia transazione per garantire atomicità (usando Workspace)
     ws.BeginTrans
 
-    On Error GoTo RollbackHandler
+    ' Error handler rimosso per debug
 
     ' 5a. Importa CSV main e crea preventivo
     nuovoIDPreventivo = ImportaCSVMain(csvMainPath, db)
@@ -126,18 +126,6 @@ Public Sub ImportaPreventivoCompleto()
     MsgBox "Preventivo importato con successo!" & vbCrLf & _
            "ID Preventivo: " & nuovoIDPreventivo, vbInformation, "Successo"
 
-    Exit Sub
-
-RollbackHandler:
-    ws.Rollback
-    MsgBox "Errore durante l'importazione. Tutte le modifiche sono state annullate." & vbCrLf & _
-           "Dettaglio: " & Err.Description, vbCritical, "Errore"
-    EliminaCartella tempFolder
-    Exit Sub
-
-ErrorHandler:
-    MsgBox "Errore: " & Err.Description & " (Codice: " & Err.Number & ")", vbCritical, "Errore"
-    EliminaCartella tempFolder
 End Sub
 
 ' ==============================================================================
@@ -168,7 +156,7 @@ Private Function SelezionaFileZip(cartellaIniziale As String) As String
 End Function
 
 Private Function GetCartellaLavoro() As String
-    On Error GoTo ErrorHandler
+    ' Error handler rimosso per debug
 
     Dim downloadsPath As String
     Dim cartellaLavoroPath As String
@@ -189,14 +177,11 @@ Private Function GetCartellaLavoro() As String
     End If
 
     GetCartellaLavoro = cartellaLavoroPath
-    Exit Function
 
-ErrorHandler:
-    GetCartellaLavoro = ""
 End Function
 
 Private Function CreaCartellaSeNonEsiste(percorso As String) As Boolean
-    On Error Resume Next
+    ' Error handler rimosso per debug
 
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
@@ -207,10 +192,9 @@ Private Function CreaCartellaSeNonEsiste(percorso As String) As Boolean
         fso.CreateFolder percorso
     End If
 
-    CreaCartellaSeNonEsiste = (Err.Number = 0)
+    CreaCartellaSeNonEsiste = True
 
     Set fso = Nothing
-    On Error GoTo 0
 End Function
 
 Private Function FileExists(filePath As String) As Boolean
@@ -218,7 +202,7 @@ Private Function FileExists(filePath As String) As Boolean
 End Function
 
 Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
-    On Error GoTo ErrorHandler
+    ' Error handler rimosso per debug
 
     ' Verifica che il file ZIP esista
     If Not FileExists(zipPath) Then
@@ -270,9 +254,7 @@ Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
     exitCode = wsh.Run("wscript.exe """ & vbsPath & """", 0, True)
 
     ' Elimina lo script temporaneo
-    On Error Resume Next
     Kill vbsPath
-    On Error GoTo ErrorHandler
 
     If exitCode <> 0 Then
         MsgBox "Errore durante l'estrazione del ZIP (codice: " & exitCode & ")" & vbCrLf & _
@@ -311,18 +293,11 @@ Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
     Set fso = Nothing
 
     EstraiZip = True
-    Exit Function
 
-ErrorHandler:
-    MsgBox "Errore imprevisto in EstraiZip: " & Err.Description & " (Codice: " & Err.Number & ")", vbCritical, "Errore"
-    On Error Resume Next
-    Kill vbsPath ' Pulisci in caso di errore
-    On Error GoTo 0
-    EstraiZip = False
 End Function
 
 Private Sub EliminaCartella(percorso As String)
-    On Error Resume Next
+    ' Error handler rimosso per debug
 
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
@@ -333,7 +308,6 @@ Private Sub EliminaCartella(percorso As String)
     End If
 
     Set fso = Nothing
-    On Error GoTo 0
 End Sub
 
 Private Function EstraiEventoID(nomeFile As String) As String
@@ -365,7 +339,7 @@ End Function
 ' ==============================================================================
 
 Private Function LeggiCSV(filePath As String) As Collection
-    On Error GoTo ErrorHandler
+    ' Error handler rimosso per debug
 
     Dim righe As New Collection
     Dim fileNum As Integer
@@ -408,12 +382,7 @@ Private Function LeggiCSV(filePath As String) As Collection
     Close #fileNum
 
     Set LeggiCSV = righe
-    Exit Function
 
-ErrorHandler:
-    If fileNum > 0 Then Close #fileNum
-    MsgBox "Errore durante la lettura del CSV: " & filePath & vbCrLf & Err.Description, vbCritical
-    Set LeggiCSV = Nothing
 End Function
 
 Private Function ParseCSVLine(riga As String) As String()
@@ -459,7 +428,7 @@ End Function
 ' ==============================================================================
 
 Private Function ImportaCSVMain(csvPath As String, db As DAO.Database) As Long
-    On Error GoTo ErrorHandler
+    ' Error handler rimosso per debug
 
     Dim righe As Collection
     Set righe = LeggiCSV(csvPath)
@@ -645,19 +614,10 @@ Private Function ImportaCSVMain(csvPath As String, db As DAO.Database) As Long
     rs.Close
     Set rs = Nothing
 
-    Exit Function
-
-ErrorHandler:
-    If Not rs Is Nothing Then
-        If rs.EditMode <> dbEditNone Then rs.CancelUpdate
-        rs.Close
-    End If
-    MsgBox "Errore ImportaCSVMain: " & Err.Description, vbCritical
-    ImportaCSVMain = 0
 End Function
 
 Private Function ImportaCSVPersonale(csvPath As String, idPreventivo As Long, db As DAO.Database) As Boolean
-    On Error GoTo ErrorHandler
+    ' Error handler rimosso per debug
 
     Dim righe As Collection
     Set righe = LeggiCSV(csvPath)
@@ -730,19 +690,11 @@ Private Function ImportaCSVPersonale(csvPath As String, idPreventivo As Long, db
     Set rs = Nothing
 
     ImportaCSVPersonale = True
-    Exit Function
 
-ErrorHandler:
-    If Not rs Is Nothing Then
-        If rs.EditMode <> dbEditNone Then rs.CancelUpdate
-        rs.Close
-    End If
-    MsgBox "Errore ImportaCSVPersonale: " & Err.Description, vbCritical
-    ImportaCSVPersonale = False
 End Function
 
 Private Function ImportaCSVPreventivo(csvPath As String, idPreventivo As Long, db As DAO.Database) As Boolean
-    On Error GoTo ErrorHandler
+    ' Error handler rimosso per debug
 
     Dim righe As Collection
     Set righe = LeggiCSV(csvPath)
@@ -809,15 +761,7 @@ Private Function ImportaCSVPreventivo(csvPath As String, idPreventivo As Long, d
     Set rs = Nothing
 
     ImportaCSVPreventivo = True
-    Exit Function
 
-ErrorHandler:
-    If Not rs Is Nothing Then
-        If rs.EditMode <> dbEditNone Then rs.CancelUpdate
-        rs.Close
-    End If
-    MsgBox "Errore ImportaCSVPreventivo: " & Err.Description, vbCritical
-    ImportaCSVPreventivo = False
 End Function
 
 ' ==============================================================================
@@ -825,7 +769,7 @@ End Function
 ' ==============================================================================
 
 Private Function VerificaDuplicatoPreventivo(riferimento As String, db As DAO.Database) As Boolean
-    On Error Resume Next
+    ' Error handler rimosso per debug
 
     Dim rs As DAO.Recordset
     Dim sql As String
@@ -844,7 +788,7 @@ Private Function VerificaDuplicatoPreventivo(riferimento As String, db As DAO.Da
 End Function
 
 Private Function ParseDateTime(dateTimeString As String) As Variant
-    On Error Resume Next
+    ' Error handler rimosso per debug
 
     If IsNull(dateTimeString) Or dateTimeString = "" Then
         ParseDateTime = Null
@@ -855,11 +799,6 @@ Private Function ParseDateTime(dateTimeString As String) As Variant
     Dim dt As Date
     dt = CDate(dateTimeString)
 
-    If Err.Number = 0 Then
-        ParseDateTime = dt
-    Else
-        ParseDateTime = Null
-    End If
+    ParseDateTime = dt
 
-    On Error GoTo 0
 End Function
