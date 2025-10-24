@@ -33,6 +33,12 @@ Public Sub ImportaPreventivoCompleto()
     Dim eventoID As String
     Dim nuovoIDPreventivo As Long
     Dim cartellaLavoro As String
+    Dim db As DAO.Database
+    Dim ws As DAO.Workspace
+
+    ' Inizializza database e workspace
+    Set ws = DBEngine(0)
+    Set db = CurrentDb
 
     ' Ottieni percorso cartella di lavoro
     cartellaLavoro = GetCartellaLavoro()
@@ -83,13 +89,35 @@ Public Sub ImportaPreventivoCompleto()
         Exit Sub
     End If
 
+    ' 4b. Leggi l'ID del preventivo dal CSV per verificare duplicati
+    Dim idPreventivoOriginale As String
+    idPreventivoOriginale = EstraiIDPreventivoFromCSV(csvMainPath)
+
+    If idPreventivoOriginale = "" Then
+        MsgBox "Impossibile estrarre l'ID del preventivo dal file CSV.", vbCritical, "Errore"
+        EliminaCartella tempFolder
+        Exit Sub
+    End If
+
+    ' 4c. Verifica se esiste già un preventivo con questo ID
+    If VerificaEsistenzaPreventivo(idPreventivoOriginale, db) Then
+        Dim risposta As VbMsgBoxResult
+        risposta = MsgBox("Esiste già un preventivo con ID: " & idPreventivoOriginale & vbCrLf & vbCrLf & _
+                          "Vuoi sostituirlo con i nuovi dati?" & vbCrLf & vbCrLf & _
+                          "ATTENZIONE: Questa operazione eliminerà il preventivo esistente e tutti i dati collegati.", _
+                          vbYesNo + vbQuestion, "Preventivo Esistente")
+
+        If risposta = vbNo Then
+            MsgBox "Operazione annullata dall'utente.", vbInformation, "Annullato"
+            EliminaCartella tempFolder
+            Exit Sub
+        Else
+            ' Elimina il preventivo esistente e tutti i record collegati
+            EliminaPreventivo idPreventivoOriginale, db
+        End If
+    End If
+
     ' 5. Inizio transazione e importazione
-    Dim db As DAO.Database
-    Dim ws As DAO.Workspace
-
-    Set ws = DBEngine(0)
-    Set db = CurrentDb
-
     ' Inizia transazione per garantire atomicità (usando Workspace)
     ws.BeginTrans
 
@@ -442,15 +470,10 @@ Private Function ImportaCSVMain(csvPath As String, db As DAO.Database) As Long
     Dim riga As Object
     Set riga = righe(1)
 
-    ' Verifica duplicati usando l'ID originale salvato nel campo "riferimento"
+    ' L'ID originale viene usato nel campo Riferimento
+    ' La verifica duplicati è già stata fatta prima di chiamare questa funzione
     Dim idOriginale As String
     idOriginale = "EVENTO_" & CStr(riga("id"))
-
-    If VerificaDuplicatoPreventivo(idOriginale, db) Then
-        MsgBox "Preventivo già esistente nel database (ID: " & idOriginale & ")", vbExclamation, "Duplicato"
-        ImportaCSVMain = 0
-        Exit Function
-    End If
 
     ' Crea nuovo record preventivo
     Dim rs As DAO.Recordset
@@ -768,25 +791,6 @@ End Function
 ' FUNZIONI DI SUPPORTO
 ' ==============================================================================
 
-Private Function VerificaDuplicatoPreventivo(riferimento As String, db As DAO.Database) As Boolean
-    ' Error handler rimosso per debug
-
-    Dim rs As DAO.Recordset
-    Dim sql As String
-
-    sql = "SELECT COUNT(*) AS Totale FROM preventivi WHERE Riferimento LIKE '" & riferimento & "%'"
-    Set rs = db.OpenRecordset(sql, dbOpenSnapshot)
-
-    If Not rs.EOF Then
-        VerificaDuplicatoPreventivo = (rs("Totale") > 0)
-    Else
-        VerificaDuplicatoPreventivo = False
-    End If
-
-    rs.Close
-    Set rs = Nothing
-End Function
-
 Private Function ParseDateTime(dateTimeString As String) As Variant
     ' Error handler rimosso per debug
 
@@ -802,3 +806,116 @@ Private Function ParseDateTime(dateTimeString As String) As Variant
     ParseDateTime = dt
 
 End Function
+
+Private Function EstraiIDPreventivoFromCSV(csvPath As String) As String
+    ' Legge il CSV e estrae l'ID del preventivo dalla prima riga di dati
+
+    Dim fileNum As Integer
+    Dim riga As String
+    Dim headers() As String
+    Dim valori() As String
+    Dim idIndex As Integer
+    Dim i As Integer
+
+    fileNum = FreeFile()
+    Open csvPath For Input As #fileNum
+
+    ' Leggi header
+    Line Input #fileNum, riga
+    headers = ParseCSVLine(riga)
+
+    ' Trova l'indice della colonna "id"
+    idIndex = -1
+    For i = LBound(headers) To UBound(headers)
+        If LCase(Trim(headers(i))) = "id" Then
+            idIndex = i
+            Exit For
+        End If
+    Next i
+
+    If idIndex = -1 Then
+        Close #fileNum
+        EstraiIDPreventivoFromCSV = ""
+        Exit Function
+    End If
+
+    ' Leggi prima riga di dati
+    If Not EOF(fileNum) Then
+        Line Input #fileNum, riga
+        valori = ParseCSVLine(riga)
+
+        If idIndex <= UBound(valori) Then
+            EstraiIDPreventivoFromCSV = Trim(valori(idIndex))
+        Else
+            EstraiIDPreventivoFromCSV = ""
+        End If
+    Else
+        EstraiIDPreventivoFromCSV = ""
+    End If
+
+    Close #fileNum
+
+End Function
+
+Private Function VerificaEsistenzaPreventivo(idOriginale As String, db As DAO.Database) As Boolean
+    ' Verifica se esiste già un preventivo con questo ID originale
+    ' L'ID originale è salvato nel campo Riferimento come "EVENTO_[id]"
+
+    Dim rs As DAO.Recordset
+    Dim sql As String
+    Dim riferimentoCerca As String
+
+    riferimentoCerca = "EVENTO_" & idOriginale
+
+    sql = "SELECT COUNT(*) AS Totale FROM preventivi WHERE Riferimento LIKE '" & riferimentoCerca & "%'"
+    Set rs = db.OpenRecordset(sql, dbOpenSnapshot)
+
+    If Not rs.EOF Then
+        VerificaEsistenzaPreventivo = (rs("Totale") > 0)
+    Else
+        VerificaEsistenzaPreventivo = False
+    End If
+
+    rs.Close
+    Set rs = Nothing
+
+End Function
+
+Private Sub EliminaPreventivo(idOriginale As String, db As DAO.Database)
+    ' Elimina il preventivo esistente e tutti i record collegati
+    ' (Tecnici preventivati e Servizi preventivati)
+
+    Dim rs As DAO.Recordset
+    Dim sql As String
+    Dim riferimentoCerca As String
+    Dim idPreventivoDA As Long
+
+    riferimentoCerca = "EVENTO_" & idOriginale
+
+    ' Trova l'ID_preventivo del record da eliminare
+    sql = "SELECT ID_preventivo FROM preventivi WHERE Riferimento LIKE '" & riferimentoCerca & "%'"
+    Set rs = db.OpenRecordset(sql, dbOpenSnapshot)
+
+    If Not rs.EOF Then
+        idPreventivoDA = rs("ID_preventivo")
+        rs.Close
+
+        ' Elimina prima i record collegati in Tecnici preventivati
+        sql = "DELETE FROM [Tecnici preventivati] WHERE ID_preventivo = " & idPreventivoDA
+        db.Execute sql, dbFailOnError
+
+        ' Elimina record collegati in Servizi preventivati
+        sql = "DELETE FROM [Servizi preventivati] WHERE ID_preventivo = " & idPreventivoDA
+        db.Execute sql, dbFailOnError
+
+        ' Infine elimina il preventivo stesso
+        sql = "DELETE FROM preventivi WHERE ID_preventivo = " & idPreventivoDA
+        db.Execute sql, dbFailOnError
+
+    Else
+        rs.Close
+    End If
+
+    Set rs = Nothing
+
+End Sub
