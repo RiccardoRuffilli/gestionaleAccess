@@ -237,36 +237,60 @@ Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
         Exit Function
     End If
 
-    ' Usa PowerShell per estrarre il ZIP (molto più affidabile di Shell.Application)
+    ' Metodo compatibile con Windows 7 - usa VBScript per estrarre
     Dim wsh As Object
     Set wsh = CreateObject("WScript.Shell")
 
-    ' Comando PowerShell per estrarre ZIP
-    Dim psCommand As String
-    psCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command " & _
-                """& {Add-Type -AssemblyName System.IO.Compression.FileSystem; " & _
-                "[System.IO.Compression.ZipFile]::ExtractToDirectory('" & zipPath & "', '" & destFolder & "')}"""
+    ' Crea uno script VBS temporaneo per l'estrazione
+    Dim vbsPath As String
+    vbsPath = Environ("TEMP") & "\ExtractZip_" & Format(Now(), "yyyymmddhhnnss") & ".vbs"
 
-    ' Esegui comando e attendi completamento
+    Dim vbsContent As String
+    vbsContent = "Set objShell = CreateObject(""Shell.Application"")" & vbCrLf & _
+                 "Set objSource = objShell.NameSpace(""" & zipPath & """)" & vbCrLf & _
+                 "Set objTarget = objShell.NameSpace(""" & destFolder & """)" & vbCrLf & _
+                 "If Not objSource Is Nothing And Not objTarget Is Nothing Then" & vbCrLf & _
+                 "    intOptions = 16 + 4" & vbCrLf & _
+                 "    objTarget.CopyHere objSource.Items, intOptions" & vbCrLf & _
+                 "    WScript.Sleep 500" & vbCrLf & _
+                 "    WScript.Quit 0" & vbCrLf & _
+                 "Else" & vbCrLf & _
+                 "    WScript.Quit 1" & vbCrLf & _
+                 "End If"
+
+    ' Scrivi lo script VBS
+    Dim fileNum As Integer
+    fileNum = FreeFile()
+    Open vbsPath For Output As #fileNum
+    Print #fileNum, vbsContent
+    Close #fileNum
+
+    ' Esegui lo script VBS
     Dim exitCode As Integer
-    exitCode = wsh.Run(psCommand, 0, True) ' 0 = finestra nascosta, True = attendi
+    exitCode = wsh.Run("wscript.exe """ & vbsPath & """", 0, True)
+
+    ' Elimina lo script temporaneo
+    On Error Resume Next
+    Kill vbsPath
+    On Error GoTo ErrorHandler
 
     If exitCode <> 0 Then
         MsgBox "Errore durante l'estrazione del ZIP (codice: " & exitCode & ")" & vbCrLf & _
                "File: " & zipPath & vbCrLf & _
-               "Destinazione: " & destFolder, vbCritical, "Errore PowerShell"
+               "Destinazione: " & destFolder & vbCrLf & vbCrLf & _
+               "Verifica che il file ZIP sia valido e non corrotto.", vbCritical, "Errore Estrazione"
         EstraiZip = False
         Set wsh = Nothing
         Set fso = Nothing
         Exit Function
     End If
 
-    ' Verifica se ci sono file CSV estratti
+    ' Attendi che i file siano effettivamente estratti
     Dim i As Integer
     Dim filesTrovati As Boolean
     filesTrovati = False
 
-    For i = 1 To 10 ' Verifica fino a 1 secondo (già estratto da PowerShell)
+    For i = 1 To 30 ' Attendi fino a 3 secondi
         DoEvents
         Sleep 100
 
@@ -278,8 +302,9 @@ Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
 
     If Not filesTrovati Then
         MsgBox "Attenzione: Nessun file CSV trovato nella cartella estratta." & vbCrLf & _
-               "Cartella: " & destFolder, vbExclamation, "Attenzione"
-        ' Non bloccare, forse ci sono altri file
+               "Cartella: " & destFolder & vbCrLf & vbCrLf & _
+               "L'estrazione potrebbe richiedere più tempo. Verifica manualmente la cartella.", _
+               vbExclamation, "Attenzione"
     End If
 
     Set wsh = Nothing
@@ -290,6 +315,9 @@ Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
 
 ErrorHandler:
     MsgBox "Errore imprevisto in EstraiZip: " & Err.Description & " (Codice: " & Err.Number & ")", vbCritical, "Errore"
+    On Error Resume Next
+    Kill vbsPath ' Pulisci in caso di errore
+    On Error GoTo 0
     EstraiZip = False
 End Function
 
