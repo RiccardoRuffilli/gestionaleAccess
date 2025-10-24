@@ -193,20 +193,22 @@ Private Function SelezionaFileJSON(cartellaIniziale As String) As String
 End Function
 
 Private Function LeggiFileJSON(filePath As String) As Object
-    ' Legge il file JSON e lo parsifica usando ScriptControl
+    ' Legge il file JSON con encoding UTF-8 corretto
 
-    Dim fso As Object
-    Set fso = CreateObject("Scripting.FileSystemObject")
+    ' Usa ADODB.Stream per leggere UTF-8
+    Dim stream As Object
+    Set stream = CreateObject("ADODB.Stream")
 
-    Dim file As Object
-    Set file = fso.OpenTextFile(filePath, 1, False, -1) ' -1 = Unicode
+    stream.Type = 2 ' adTypeText
+    stream.Charset = "UTF-8"
+    stream.Open
+    stream.LoadFromFile filePath
 
     Dim jsonText As String
-    jsonText = file.ReadAll
-    file.Close
+    jsonText = stream.ReadText
+    stream.Close
 
-    ' Parse JSON usando ScriptControl (funziona su Windows 7)
-    On Error Resume Next
+    ' Parse JSON usando ScriptControl
     Dim sc As Object
     Set sc = CreateObject("ScriptControl")
     sc.Language = "JScript"
@@ -217,18 +219,10 @@ Private Function LeggiFileJSON(filePath As String) As Object
     Dim jsObject As Object
     Set jsObject = sc.Run("parseJSON", jsonText)
 
-    If Err.Number <> 0 Then
-        MsgBox "Errore parsing JSON: " & Err.Description, vbCritical, "Errore"
-        Set LeggiFileJSON = Nothing
-        On Error GoTo 0
-        Exit Function
-    End If
-    On Error GoTo 0
-
     ' Converti JScript object in Dictionary VBA
     Set LeggiFileJSON = ConvertJSONToDictionary(jsObject)
 
-    Set fso = Nothing
+    Set stream = Nothing
     Set sc = Nothing
 End Function
 
