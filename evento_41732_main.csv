@@ -1,0 +1,3 @@
+id,nome_evento,cliente_id,referente_id,responsabile_id,aliquota_iva,data_ora_inizio,data_ora_fine,data_ora_allestimento,data_ora_disallestimento,flag_confermato,flag_annullato,flag_planner,flag_fatturazione,importo_netto,importo_con_iva,importo_lordo,sconto_cliente,location_id,note_cliente,note_fatturazione,note_interne,note_location,note_runner_arrivo,note_runner_disallestimento,note_scheda_lavoro,pagamento,gruppo,created_at,created_by
+41732,"EVENTO FIDEURAM",692,,22,22.00,"2026-01-13 09:00:00","2026-01-13 14:00:00","2026-01-13 07:00:00","2026-01-13 14:00:00",0,0,1,0,0.00,0.00,,0.00,22,"RIF Fideuram
+PERSONAL COMPUTER A CURA DEL CLIENTE",,"RIF Fideuram","SALA DA DEFINIRE",,,,,,"2025-10-23 15:38:11",438
