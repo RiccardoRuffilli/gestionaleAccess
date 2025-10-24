@@ -8,6 +8,13 @@ Option Explicit
 ' DATA: 2025-10-24
 ' ==============================================================================
 
+' Dichiarazione API Windows per Sleep
+#If VBA7 Then
+    Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+#Else
+    Private Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+#End If
+
 ' Costanti per i percorsi e configurazione
 Private Const CARTELLA_LAVORO As String = "_importazione_preventivi"
 
@@ -227,12 +234,12 @@ Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
     ' Estrai tutti i file (16 = senza dialoghi)
     destFld.CopyHere zipFile.Items, 16
 
-    ' Attendi completamento
+    ' Attendi completamento - usa Sleep API di Windows
     Dim i As Integer
-    For i = 1 To 100
+    For i = 1 To 10
         DoEvents
+        Sleep 100 ' 100 millisecondi
         If Dir(destFolder & "*.csv") <> "" Then Exit For
-        Application.Wait Now + TimeValue("00:00:01")
     Next i
 
     EstraiZip = True
