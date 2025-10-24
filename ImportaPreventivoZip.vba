@@ -70,10 +70,13 @@ Public Sub ImportaPreventivoCompleto()
 
     ' 5. Inizio transazione e importazione
     Dim db As DAO.Database
+    Dim ws As DAO.Workspace
+
+    Set ws = DBEngine(0)
     Set db = CurrentDb
 
-    ' Inizia transazione per garantire atomicità
-    db.BeginTrans
+    ' Inizia transazione per garantire atomicità (usando Workspace)
+    ws.BeginTrans
 
     On Error GoTo RollbackHandler
 
@@ -98,8 +101,8 @@ Public Sub ImportaPreventivoCompleto()
         End If
     End If
 
-    ' Commit transazione
-    db.CommitTrans
+    ' Commit transazione (usando Workspace)
+    ws.CommitTrans
 
     ' 6. Pulizia file temporanei
     EliminaCartella tempFolder
@@ -111,7 +114,7 @@ Public Sub ImportaPreventivoCompleto()
     Exit Sub
 
 RollbackHandler:
-    db.Rollback
+    ws.Rollback
     MsgBox "Errore durante l'importazione. Tutte le modifiche sono state annullate." & vbCrLf & _
            "Dettaglio: " & Err.Description, vbCritical, "Errore"
     EliminaCartella tempFolder
