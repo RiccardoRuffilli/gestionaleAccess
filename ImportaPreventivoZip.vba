@@ -217,13 +217,38 @@ End Function
 Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
     On Error GoTo ErrorHandler
 
+    ' Verifica che il file ZIP esista
+    If Not FileExists(zipPath) Then
+        MsgBox "File ZIP non trovato: " & zipPath, vbCritical, "Errore"
+        EstraiZip = False
+        Exit Function
+    End If
+
+    ' Usa FileSystemObject per estrarre il ZIP
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
     Dim shellApp As Object
     Set shellApp = CreateObject("Shell.Application")
+
+    ' Verifica che la cartella di destinazione esista
+    If Not fso.FolderExists(destFolder) Then
+        MsgBox "Cartella destinazione non trovata: " & destFolder, vbCritical, "Errore"
+        EstraiZip = False
+        Exit Function
+    End If
 
     Dim zipFile As Object
     Set zipFile = shellApp.Namespace(zipPath)
 
     If zipFile Is Nothing Then
+        MsgBox "Impossibile aprire il file ZIP: " & zipPath, vbCritical, "Errore"
+        EstraiZip = False
+        Exit Function
+    End If
+
+    If zipFile.Items.Count = 0 Then
+        MsgBox "Il file ZIP è vuoto o non contiene file validi.", vbCritical, "Errore"
         EstraiZip = False
         Exit Function
     End If
@@ -231,21 +256,56 @@ Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
     Dim destFld As Object
     Set destFld = shellApp.Namespace(destFolder)
 
-    ' Estrai tutti i file (16 = senza dialoghi)
-    destFld.CopyHere zipFile.Items, 16
+    If destFld Is Nothing Then
+        MsgBox "Impossibile accedere alla cartella di destinazione: " & destFolder, vbCritical, "Errore"
+        EstraiZip = False
+        Exit Function
+    End If
 
-    ' Attendi completamento - usa Sleep API di Windows
+    ' Estrai tutti i file (4 + 16 = 20: nessuna finestra di dialogo + sovrascrittura)
+    On Error Resume Next
+    destFld.CopyHere zipFile.Items, 20
+
+    If Err.Number <> 0 Then
+        MsgBox "Errore durante la copia dei file: " & Err.Description, vbCritical, "Errore"
+        EstraiZip = False
+        On Error GoTo 0
+        Exit Function
+    End If
+    On Error GoTo ErrorHandler
+
+    ' Attendi completamento estrazione - controlla più volte
     Dim i As Integer
-    For i = 1 To 10
+    Dim filesTrovati As Boolean
+    filesTrovati = False
+
+    For i = 1 To 30 ' Attendi fino a 3 secondi
         DoEvents
         Sleep 100 ' 100 millisecondi
-        If Dir(destFolder & "*.csv") <> "" Then Exit For
+
+        ' Verifica se ci sono file CSV estratti
+        If Dir(destFolder & "*.csv") <> "" Then
+            filesTrovati = True
+            Exit For
+        End If
     Next i
+
+    If Not filesTrovati Then
+        MsgBox "Timeout durante l'estrazione. Nessun file CSV trovato dopo 3 secondi." & vbCrLf & _
+               "Cartella: " & destFolder, vbExclamation, "Attenzione"
+        ' Non è un errore fatale, potrebbe essere ancora in corso
+    End If
+
+    Set fso = Nothing
+    Set shellApp = Nothing
+    Set zipFile = Nothing
+    Set destFld = Nothing
 
     EstraiZip = True
     Exit Function
 
 ErrorHandler:
+    MsgBox "Errore imprevisto in EstraiZip: " & Err.Description & " (Codice: " & Err.Number & ")", vbCritical, "Errore"
     EstraiZip = False
 End Function
 
