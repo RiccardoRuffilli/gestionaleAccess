@@ -61,15 +61,20 @@ Public Sub ImportaPreventivoJSON()
         Exit Sub
     End If
 
-    ' Verifica struttura JSON
-    If Not jsonData.Exists("evento") Then
+    ' Verifica struttura JSON - accesso diretto all'oggetto JavaScript
+    On Error Resume Next
+    Dim eventoObj As Object
+    Set eventoObj = CallByName(jsonData, "evento", VbGet)
+
+    If Err.Number <> 0 Or eventoObj Is Nothing Then
         MsgBox "File JSON non valido: manca la sezione 'evento'.", vbCritical, "Errore"
         Exit Sub
     End If
+    On Error GoTo 0
 
     ' Estrai ID preventivo
     Dim idPreventivoOriginale As String
-    idPreventivoOriginale = CStr(jsonData("evento")("id"))
+    idPreventivoOriginale = CStr(GetJSONValue(eventoObj, "id"))
 
     If idPreventivoOriginale = "" Then
         MsgBox "Impossibile estrarre l'ID del preventivo dal JSON.", vbCritical, "Errore"
@@ -97,7 +102,7 @@ Public Sub ImportaPreventivoJSON()
     ws.BeginTrans
 
     ' Importa dati evento (preventivo)
-    nuovoIDPreventivo = ImportaEvento(jsonData("evento"), db)
+    nuovoIDPreventivo = ImportaEvento(eventoObj, db)
 
     If nuovoIDPreventivo = 0 Then
         ws.Rollback
@@ -106,22 +111,34 @@ Public Sub ImportaPreventivoJSON()
     End If
 
     ' Importa personale (se presente)
-    If jsonData.Exists("personale") Then
-        If Not ImportaPersonale(jsonData("personale"), nuovoIDPreventivo, db) Then
+    On Error Resume Next
+    Dim personaleArray As Object
+    Set personaleArray = CallByName(jsonData, "personale", VbGet)
+
+    If Err.Number = 0 And Not personaleArray Is Nothing Then
+        On Error GoTo 0
+        If Not ImportaPersonale(personaleArray, nuovoIDPreventivo, db) Then
             ws.Rollback
             MsgBox "Errore durante l'importazione del personale.", vbCritical, "Errore"
             Exit Sub
         End If
     End If
+    On Error GoTo 0
 
     ' Importa servizi (se presente)
-    If jsonData.Exists("servizi") Then
-        If Not ImportaServizi(jsonData("servizi"), nuovoIDPreventivo, db) Then
+    On Error Resume Next
+    Dim serviziArray As Object
+    Set serviziArray = CallByName(jsonData, "servizi", VbGet)
+
+    If Err.Number = 0 And Not serviziArray Is Nothing Then
+        On Error GoTo 0
+        If Not ImportaServizi(serviziArray, nuovoIDPreventivo, db) Then
             ws.Rollback
             MsgBox "Errore durante l'importazione dei servizi.", vbCritical, "Errore"
             Exit Sub
         End If
     End If
+    On Error GoTo 0
 
     ' Commit transazione
     ws.CommitTrans
@@ -219,135 +236,38 @@ Private Function LeggiFileJSON(filePath As String) As Object
     Dim jsObject As Object
     Set jsObject = sc.Run("parseJSON", jsonText)
 
-    ' Converti JScript object in Dictionary VBA
-    Set LeggiFileJSON = ConvertJSONToDictionary(jsObject)
+    ' Restituisci direttamente l'oggetto JavaScript
+    ' Non serve conversione - accederemo alle proprietà con notazione punto
+    Set LeggiFileJSON = jsObject
 
     Set stream = Nothing
-    Set sc = Nothing
+    ' NON liberare sc - l'oggetto JavaScript ne ha bisogno
 End Function
 
-Private Function ConvertJSONToDictionary(ByVal jsObj As Object) As Object
-    ' Converte un oggetto JavaScript in Dictionary VBA ricorsivamente
-
-    Dim dict As Object
-    Set dict = CreateObject("Scripting.Dictionary")
+Private Function GetJSONValue(jsObj As Object, key As String) As Variant
+    ' Ottiene un valore dall'oggetto JavaScript gestendo valori null
 
     On Error Resume Next
+    Dim val As Variant
 
-    ' Ottieni tutte le chiavi dall'oggetto JavaScript
-    Dim keys As Object
-    Set keys = CreateObject("System.Collections.ArrayList")
-
-    ' Itera sulle proprietà usando reflection
-    Dim propName As Variant
-    For Each propName In jsObj
-        Dim propValue As Variant
-
-        ' Controlla se è un array (ha proprietà length)
-        Dim isArray As Boolean
-        isArray = False
-
-        On Error Resume Next
-        Dim testLength As Long
-        testLength = jsObj(propName).length
-        If Err.Number = 0 And testLength >= 0 Then
-            isArray = True
-        End If
-        On Error GoTo 0
-
-        If isArray Then
-            ' È un array - converti in Collection
-            Set dict(propName) = ConvertJSONArray(jsObj(propName))
-        Else
-            ' Prova a vedere se è un oggetto
-            On Error Resume Next
-            Dim testObj As Object
-            Set testObj = jsObj(propName)
-            If Err.Number = 0 And Not testObj Is Nothing Then
-                ' È un oggetto - ricorsione
-                Set dict(propName) = ConvertJSONToDictionary(testObj)
-            Else
-                ' È un valore semplice
-                On Error GoTo 0
-                dict(propName) = jsObj(propName)
-            End If
-            On Error GoTo 0
-        End If
-    Next propName
-
-    On Error GoTo 0
-
-    Set ConvertJSONToDictionary = dict
-End Function
-
-Private Function ConvertJSONArray(ByVal jsArray As Object) As Collection
-    ' Converte un array JavaScript in Collection VBA
-
-    Dim coll As New Collection
-    Dim i As Long
-    Dim arrayLength As Long
-
-    On Error Resume Next
-    arrayLength = jsArray.length
-    If Err.Number <> 0 Then
-        ' Non è un array valido
-        Set ConvertJSONArray = coll
-        Exit Function
+    ' Accesso diretto alla proprietà JavaScript
+    If IsObject(jsObj) Then
+        val = CallByName(jsObj, key, VbGet)
     End If
-    On Error GoTo 0
 
-    For i = 0 To arrayLength - 1
-        On Error Resume Next
-
-        ' Prova a vedere se l'elemento è un oggetto
-        Dim itemObj As Object
-        Set itemObj = jsArray(i)
-
-        If Err.Number = 0 And Not itemObj Is Nothing Then
-            ' È un oggetto
-            Dim testLen As Long
-            testLen = itemObj.length
-
-            If Err.Number = 0 And testLen >= 0 Then
-                ' È un array nested
-                coll.Add ConvertJSONArray(itemObj)
-            Else
-                ' È un oggetto normale
-                On Error GoTo 0
-                coll.Add ConvertJSONToDictionary(itemObj)
-            End If
-        Else
-            ' È un valore semplice
-            On Error GoTo 0
-            coll.Add jsArray(i)
-        End If
-
-        On Error GoTo 0
-    Next i
-
-    Set ConvertJSONArray = coll
-End Function
-
-Private Function GetJSONValue(dict As Object, key As String) As Variant
-    ' Ottiene un valore dal dictionary gestendo valori null
-
-    If dict.Exists(key) Then
-        If IsNull(dict(key)) Then
+    If Err.Number <> 0 Or IsNull(val) Or IsEmpty(val) Then
+        GetJSONValue = Null
+    ElseIf VarType(val) = vbString Then
+        If val = "null" Or val = "" Then
             GetJSONValue = Null
-        ElseIf IsEmpty(dict(key)) Then
-            GetJSONValue = Null
-        ElseIf VarType(dict(key)) = vbString Then
-            If dict(key) = "null" Or dict(key) = "" Then
-                GetJSONValue = Null
-            Else
-                GetJSONValue = dict(key)
-            End If
         Else
-            GetJSONValue = dict(key)
+            GetJSONValue = val
         End If
     Else
-        GetJSONValue = Null
+        GetJSONValue = val
     End If
+
+    On Error GoTo 0
 End Function
 
 ' ==============================================================================
@@ -498,19 +418,27 @@ Private Function ImportaEvento(evento As Object, db As DAO.Database) As Long
     Set rs = Nothing
 End Function
 
-Private Function ImportaPersonale(personale As Collection, idPreventivo As Long, db As DAO.Database) As Boolean
+Private Function ImportaPersonale(personaleArray As Object, idPreventivo As Long, db As DAO.Database) As Boolean
     ' Importa l'array personale nella tabella Tecnici preventivati
 
-    If personale.Count = 0 Then
+    ' Ottieni lunghezza array
+    On Error Resume Next
+    Dim arrayLength As Long
+    arrayLength = CallByName(personaleArray, "length", VbGet)
+
+    If Err.Number <> 0 Or arrayLength = 0 Then
         ImportaPersonale = True
         Exit Function
     End If
+    On Error GoTo 0
 
     Dim rs As DAO.Recordset
     Set rs = db.OpenRecordset("Tecnici preventivati", dbOpenDynaset, dbSeeChanges)
 
-    Dim persona As Object
-    For Each persona In personale
+    Dim i As Long
+    For i = 0 To arrayLength - 1
+        Dim persona As Object
+        Set persona = personaleArray(i)
         rs.AddNew
 
         ' ID_preventivo
@@ -558,7 +486,7 @@ Private Function ImportaPersonale(personale As Collection, idPreventivo As Long,
         End If
 
         rs.Update
-    Next persona
+    Next i
 
     rs.Close
     Set rs = Nothing
@@ -566,19 +494,27 @@ Private Function ImportaPersonale(personale As Collection, idPreventivo As Long,
     ImportaPersonale = True
 End Function
 
-Private Function ImportaServizi(servizi As Collection, idPreventivo As Long, db As DAO.Database) As Boolean
+Private Function ImportaServizi(serviziArray As Object, idPreventivo As Long, db As DAO.Database) As Boolean
     ' Importa l'array servizi nella tabella Servizi preventivati
 
-    If servizi.Count = 0 Then
+    ' Ottieni lunghezza array
+    On Error Resume Next
+    Dim arrayLength As Long
+    arrayLength = CallByName(serviziArray, "length", VbGet)
+
+    If Err.Number <> 0 Or arrayLength = 0 Then
         ImportaServizi = True
         Exit Function
     End If
+    On Error GoTo 0
 
     Dim rs As DAO.Recordset
     Set rs = db.OpenRecordset("Servizi preventivati", dbOpenDynaset, dbSeeChanges)
 
-    Dim servizio As Object
-    For Each servizio In servizi
+    Dim i As Long
+    For i = 0 To arrayLength - 1
+        Dim servizio As Object
+        Set servizio = serviziArray(i)
         rs.AddNew
 
         ' ID_preventivo
@@ -625,7 +561,7 @@ Private Function ImportaServizi(servizi As Collection, idPreventivo As Long, db 
         End If
 
         rs.Update
-    Next servizio
+    Next i
 
     rs.Close
     Set rs = Nothing
