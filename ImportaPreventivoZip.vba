@@ -9,7 +9,7 @@ Option Explicit
 ' ==============================================================================
 
 ' Costanti per i percorsi e configurazione
-Private Const TEMP_FOLDER As String = "C:\Temp\ImportPreventivi\"
+Private Const CARTELLA_LAVORO As String = "_importazione_preventivi"
 
 ' ==============================================================================
 ' FUNZIONE PRINCIPALE
@@ -25,19 +25,27 @@ Public Sub ImportaPreventivoCompleto()
     Dim csvPreventivoPath As String
     Dim eventoID As String
     Dim nuovoIDPreventivo As Long
+    Dim cartellaLavoro As String
+
+    ' Ottieni percorso cartella di lavoro
+    cartellaLavoro = GetCartellaLavoro()
+    If cartellaLavoro = "" Then
+        MsgBox "Impossibile trovare o creare la cartella di lavoro.", vbCritical, "Errore"
+        Exit Sub
+    End If
 
     ' Messaggio iniziale
     MsgBox "Selezionare il file ZIP contenente i file CSV del preventivo.", vbInformation, "Importazione Preventivo"
 
     ' 1. Selezione file ZIP
-    zipFilePath = SelezionaFileZip()
+    zipFilePath = SelezionaFileZip(cartellaLavoro)
     If zipFilePath = "" Then
         MsgBox "Operazione annullata dall'utente.", vbExclamation, "Annullato"
         Exit Sub
     End If
 
     ' 2. Creazione cartella temporanea e estrazione ZIP
-    tempFolder = TEMP_FOLDER & Format(Now(), "yyyymmddhhnnss") & "\"
+    tempFolder = cartellaLavoro & "temp\" & Format(Now(), "yyyymmddhhnnss") & "\"
     If Not CreaCartellaSeNonEsiste(tempFolder) Then
         MsgBox "Impossibile creare la cartella temporanea: " & tempFolder, vbCritical, "Errore"
         Exit Sub
@@ -129,7 +137,7 @@ End Sub
 ' FUNZIONI DI UTILITÀ PER FILE E CARTELLE
 ' ==============================================================================
 
-Private Function SelezionaFileZip() As String
+Private Function SelezionaFileZip(cartellaIniziale As String) As String
     Dim fd As Object
     Set fd = Application.FileDialog(3) ' msoFileDialogFilePicker
 
@@ -138,6 +146,9 @@ Private Function SelezionaFileZip() As String
         .Filters.Clear
         .Filters.Add "File ZIP", "*.zip"
         .AllowMultiSelect = False
+
+        ' Imposta la cartella iniziale
+        .InitialFileName = cartellaIniziale
 
         If .Show = -1 Then
             SelezionaFileZip = .SelectedItems(1)
@@ -149,12 +160,46 @@ Private Function SelezionaFileZip() As String
     Set fd = Nothing
 End Function
 
+Private Function GetCartellaLavoro() As String
+    On Error GoTo ErrorHandler
+
+    Dim downloadsPath As String
+    Dim cartellaLavoroPath As String
+
+    ' Ottieni percorso Downloads
+    downloadsPath = Environ("USERPROFILE") & "\Downloads\"
+
+    ' Crea percorso cartella di lavoro
+    cartellaLavoroPath = downloadsPath & CARTELLA_LAVORO & "\"
+
+    ' Crea cartella se non esiste
+    If Not CreaCartellaSeNonEsiste(cartellaLavoroPath) Then
+        GetCartellaLavoro = ""
+        Exit Function
+    End If
+
+    GetCartellaLavoro = cartellaLavoroPath
+    Exit Function
+
+ErrorHandler:
+    GetCartellaLavoro = ""
+End Function
+
 Private Function CreaCartellaSeNonEsiste(percorso As String) As Boolean
     On Error Resume Next
-    If Dir(percorso, vbDirectory) = "" Then
-        MkDir percorso
+
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    ' Verifica se la cartella esiste
+    If Not fso.FolderExists(percorso) Then
+        ' Crea la cartella (ricorsivo)
+        fso.CreateFolder percorso
     End If
+
     CreaCartellaSeNonEsiste = (Err.Number = 0)
+
+    Set fso = Nothing
     On Error GoTo 0
 End Function
 
@@ -199,8 +244,16 @@ End Function
 
 Private Sub EliminaCartella(percorso As String)
     On Error Resume Next
-    Kill percorso & "*.*"
-    RmDir percorso
+
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    ' Elimina la cartella e tutto il suo contenuto
+    If fso.FolderExists(percorso) Then
+        fso.DeleteFolder percorso, True
+    End If
+
+    Set fso = Nothing
     On Error GoTo 0
 End Sub
 
