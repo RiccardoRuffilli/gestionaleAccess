@@ -226,56 +226,104 @@ Private Function LeggiFileJSON(filePath As String) As Object
     Set sc = Nothing
 End Function
 
-Private Function ConvertJSONToDictionary(jsObj As Object) As Object
+Private Function ConvertJSONToDictionary(ByVal jsObj As Object) As Object
     ' Converte un oggetto JavaScript in Dictionary VBA ricorsivamente
 
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
 
-    ' Ottieni tutte le proprietà dell'oggetto JavaScript
-    Dim propName As Variant
-
-    ' Per oggetti semplici
     On Error Resume Next
+
+    ' Ottieni tutte le chiavi dall'oggetto JavaScript
+    Dim keys As Object
+    Set keys = CreateObject("System.Collections.ArrayList")
+
+    ' Itera sulle proprietà usando reflection
+    Dim propName As Variant
     For Each propName In jsObj
         Dim propValue As Variant
-        propValue = jsObj(propName)
 
-        ' Se è un oggetto nested, converti ricorsivamente
-        If IsObject(propValue) Then
-            ' Controlla se è un array
-            If TypeName(propValue) = "JScriptTypeInfo" Or IsArray(propValue) Then
-                dict(propName) = ConvertJSONArray(propValue)
-            Else
-                dict(propName) = ConvertJSONToDictionary(propValue)
-            End If
+        ' Controlla se è un array (ha proprietà length)
+        Dim isArray As Boolean
+        isArray = False
+
+        On Error Resume Next
+        Dim testLength As Long
+        testLength = jsObj(propName).length
+        If Err.Number = 0 And testLength >= 0 Then
+            isArray = True
+        End If
+        On Error GoTo 0
+
+        If isArray Then
+            ' È un array - converti in Collection
+            Set dict(propName) = ConvertJSONArray(jsObj(propName))
         Else
-            dict(propName) = propValue
+            ' Prova a vedere se è un oggetto
+            On Error Resume Next
+            Dim testObj As Object
+            Set testObj = jsObj(propName)
+            If Err.Number = 0 And Not testObj Is Nothing Then
+                ' È un oggetto - ricorsione
+                Set dict(propName) = ConvertJSONToDictionary(testObj)
+            Else
+                ' È un valore semplice
+                On Error GoTo 0
+                dict(propName) = jsObj(propName)
+            End If
+            On Error GoTo 0
         End If
     Next propName
+
     On Error GoTo 0
 
     Set ConvertJSONToDictionary = dict
 End Function
 
-Private Function ConvertJSONArray(jsArray As Object) As Collection
+Private Function ConvertJSONArray(ByVal jsArray As Object) As Collection
     ' Converte un array JavaScript in Collection VBA
 
     Dim coll As New Collection
     Dim i As Long
+    Dim arrayLength As Long
 
     On Error Resume Next
-    For i = 0 To jsArray.length - 1
-        Dim item As Variant
-        item = jsArray(i)
-
-        If IsObject(item) Then
-            coll.Add ConvertJSONToDictionary(item)
-        Else
-            coll.Add item
-        End If
-    Next i
+    arrayLength = jsArray.length
+    If Err.Number <> 0 Then
+        ' Non è un array valido
+        Set ConvertJSONArray = coll
+        Exit Function
+    End If
     On Error GoTo 0
+
+    For i = 0 To arrayLength - 1
+        On Error Resume Next
+
+        ' Prova a vedere se l'elemento è un oggetto
+        Dim itemObj As Object
+        Set itemObj = jsArray(i)
+
+        If Err.Number = 0 And Not itemObj Is Nothing Then
+            ' È un oggetto
+            Dim testLen As Long
+            testLen = itemObj.length
+
+            If Err.Number = 0 And testLen >= 0 Then
+                ' È un array nested
+                coll.Add ConvertJSONArray(itemObj)
+            Else
+                ' È un oggetto normale
+                On Error GoTo 0
+                coll.Add ConvertJSONToDictionary(itemObj)
+            End If
+        Else
+            ' È un valore semplice
+            On Error GoTo 0
+            coll.Add jsArray(i)
+        End If
+
+        On Error GoTo 0
+    Next i
 
     Set ConvertJSONArray = coll
 End Function
