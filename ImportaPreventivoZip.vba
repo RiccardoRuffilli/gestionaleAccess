@@ -485,7 +485,7 @@ Private Function ImportaCSVMain(csvPath As String, db As DAO.Database) As Long
 
     ' Crea nuovo record preventivo
     Dim rs As DAO.Recordset
-    Set rs = db.OpenRecordset("preventivi", dbOpenDynaset)
+    Set rs = db.OpenRecordset("preventivi", dbOpenDynaset, dbSeeChanges)
 
     rs.AddNew
 
@@ -649,7 +649,7 @@ Private Function ImportaCSVPersonale(csvPath As String, idPreventivo As Long, db
     End If
 
     Dim rs As DAO.Recordset
-    Set rs = db.OpenRecordset("Tecnici preventivati", dbOpenDynaset)
+    Set rs = db.OpenRecordset("Tecnici preventivati", dbOpenDynaset, dbSeeChanges)
 
     Dim riga As Object
     For Each riga In righe
@@ -732,7 +732,7 @@ Private Function ImportaCSVPreventivo(csvPath As String, idPreventivo As Long, d
     End If
 
     Dim rs As DAO.Recordset
-    Set rs = db.OpenRecordset("Servizi preventivati", dbOpenDynaset)
+    Set rs = db.OpenRecordset("Servizi preventivati", dbOpenDynaset, dbSeeChanges)
 
     Dim riga As Object
     For Each riga In righe
