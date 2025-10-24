@@ -174,10 +174,13 @@ Private Function GetCartellaLavoro() As String
     Dim cartellaLavoroPath As String
 
     ' Ottieni percorso Downloads
-    downloadsPath = Environ("USERPROFILE") & "\Downloads\"
+    downloadsPath = Environ("USERPROFILE")
+    If Right(downloadsPath, 1) <> "\" Then downloadsPath = downloadsPath & "\"
+    downloadsPath = downloadsPath & "Downloads\"
 
     ' Crea percorso cartella di lavoro
-    cartellaLavoroPath = downloadsPath & CARTELLA_LAVORO & "\"
+    cartellaLavoroPath = downloadsPath & CARTELLA_LAVORO
+    If Right(cartellaLavoroPath, 1) <> "\" Then cartellaLavoroPath = cartellaLavoroPath & "\"
 
     ' Crea cartella se non esiste
     If Not CreaCartellaSeNonEsiste(cartellaLavoroPath) Then
@@ -224,12 +227,8 @@ Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
         Exit Function
     End If
 
-    ' Usa FileSystemObject per estrarre il ZIP
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
-
-    Dim shellApp As Object
-    Set shellApp = CreateObject("Shell.Application")
 
     ' Verifica che la cartella di destinazione esista
     If Not fso.FolderExists(destFolder) Then
@@ -238,52 +237,39 @@ Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
         Exit Function
     End If
 
-    Dim zipFile As Object
-    Set zipFile = shellApp.Namespace(zipPath)
+    ' Usa PowerShell per estrarre il ZIP (molto più affidabile di Shell.Application)
+    Dim wsh As Object
+    Set wsh = CreateObject("WScript.Shell")
 
-    If zipFile Is Nothing Then
-        MsgBox "Impossibile aprire il file ZIP: " & zipPath, vbCritical, "Errore"
+    ' Comando PowerShell per estrarre ZIP
+    Dim psCommand As String
+    psCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command " & _
+                """& {Add-Type -AssemblyName System.IO.Compression.FileSystem; " & _
+                "[System.IO.Compression.ZipFile]::ExtractToDirectory('" & zipPath & "', '" & destFolder & "')}"""
+
+    ' Esegui comando e attendi completamento
+    Dim exitCode As Integer
+    exitCode = wsh.Run(psCommand, 0, True) ' 0 = finestra nascosta, True = attendi
+
+    If exitCode <> 0 Then
+        MsgBox "Errore durante l'estrazione del ZIP (codice: " & exitCode & ")" & vbCrLf & _
+               "File: " & zipPath & vbCrLf & _
+               "Destinazione: " & destFolder, vbCritical, "Errore PowerShell"
         EstraiZip = False
+        Set wsh = Nothing
+        Set fso = Nothing
         Exit Function
     End If
 
-    If zipFile.Items.Count = 0 Then
-        MsgBox "Il file ZIP è vuoto o non contiene file validi.", vbCritical, "Errore"
-        EstraiZip = False
-        Exit Function
-    End If
-
-    Dim destFld As Object
-    Set destFld = shellApp.Namespace(destFolder)
-
-    If destFld Is Nothing Then
-        MsgBox "Impossibile accedere alla cartella di destinazione: " & destFolder, vbCritical, "Errore"
-        EstraiZip = False
-        Exit Function
-    End If
-
-    ' Estrai tutti i file (4 + 16 = 20: nessuna finestra di dialogo + sovrascrittura)
-    On Error Resume Next
-    destFld.CopyHere zipFile.Items, 20
-
-    If Err.Number <> 0 Then
-        MsgBox "Errore durante la copia dei file: " & Err.Description, vbCritical, "Errore"
-        EstraiZip = False
-        On Error GoTo 0
-        Exit Function
-    End If
-    On Error GoTo ErrorHandler
-
-    ' Attendi completamento estrazione - controlla più volte
+    ' Verifica se ci sono file CSV estratti
     Dim i As Integer
     Dim filesTrovati As Boolean
     filesTrovati = False
 
-    For i = 1 To 30 ' Attendi fino a 3 secondi
+    For i = 1 To 10 ' Verifica fino a 1 secondo (già estratto da PowerShell)
         DoEvents
-        Sleep 100 ' 100 millisecondi
+        Sleep 100
 
-        ' Verifica se ci sono file CSV estratti
         If Dir(destFolder & "*.csv") <> "" Then
             filesTrovati = True
             Exit For
@@ -291,15 +277,13 @@ Private Function EstraiZip(zipPath As String, destFolder As String) As Boolean
     Next i
 
     If Not filesTrovati Then
-        MsgBox "Timeout durante l'estrazione. Nessun file CSV trovato dopo 3 secondi." & vbCrLf & _
+        MsgBox "Attenzione: Nessun file CSV trovato nella cartella estratta." & vbCrLf & _
                "Cartella: " & destFolder, vbExclamation, "Attenzione"
-        ' Non è un errore fatale, potrebbe essere ancora in corso
+        ' Non bloccare, forse ci sono altri file
     End If
 
+    Set wsh = Nothing
     Set fso = Nothing
-    Set shellApp = Nothing
-    Set zipFile = Nothing
-    Set destFld = Nothing
 
     EstraiZip = True
     Exit Function
