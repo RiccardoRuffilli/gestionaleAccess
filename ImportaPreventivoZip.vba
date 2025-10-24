@@ -540,11 +540,30 @@ Private Function ImportaCSVMain(csvPath As String, db As DAO.Database) As Long
         rs("Ora disallestimento") = CDate(dataOra)
     End If
 
-    ' Flag booleani
-    rs("confermato") = CBool(riga("flag_confermato"))
-    rs("annullato") = CBool(riga("flag_annullato"))
-    rs("planner") = CBool(riga("flag_planner"))
-    rs("Fatturato") = CBool(riga("flag_fatturazione"))
+    ' Flag booleani (converti 0/1 in True/False per campi bit)
+    If Not IsNull(riga("flag_confermato")) And riga("flag_confermato") <> "" Then
+        rs("Confermato") = IIf(CLng(riga("flag_confermato")) = 0, False, True)
+    Else
+        rs("Confermato") = False
+    End If
+
+    If Not IsNull(riga("flag_annullato")) And riga("flag_annullato") <> "" Then
+        rs("annullato") = IIf(CLng(riga("flag_annullato")) = 0, False, True)
+    Else
+        rs("annullato") = False
+    End If
+
+    If Not IsNull(riga("flag_planner")) And riga("flag_planner") <> "" Then
+        rs("planner") = IIf(CLng(riga("flag_planner")) = 0, False, True)
+    Else
+        rs("planner") = True ' Default 1
+    End If
+
+    If Not IsNull(riga("flag_fatturazione")) And riga("flag_fatturazione") <> "" Then
+        rs("Fatturato") = IIf(CLng(riga("flag_fatturazione")) = 0, False, True)
+    Else
+        rs("Fatturato") = False
+    End If
 
     ' Sconto cliente
     If Not IsNull(riga("sconto_cliente")) And riga("sconto_cliente") <> "" Then
@@ -697,9 +716,11 @@ Private Function ImportaCSVPersonale(csvPath As String, idPreventivo As Long, db
             rs("ora_disallestimento_tecnico") = oraFine
         End If
 
-        ' Conferma tecnico
+        ' Conferma tecnico (converti 0/1 in True/False per campo bit)
         If Not IsNull(riga("confirmed")) And riga("confirmed") <> "" Then
-            rs("Conferma tecnico") = CBool(riga("confirmed"))
+            rs("Conferma tecnico") = IIf(CLng(riga("confirmed")) = 0, False, True)
+        Else
+            rs("Conferma tecnico") = False
         End If
 
         rs.Update
@@ -751,29 +772,29 @@ Private Function ImportaCSVPreventivo(csvPath As String, idPreventivo As Long, d
             rs("ordine") = CLng(riga("ord"))
         End If
 
-        ' Quantità
+        ' Quantità ([real] = Single)
         If Not IsNull(riga("qty")) And riga("qty") <> "" Then
-            rs("quantità") = CDbl(riga("qty"))
+            rs("quantità") = CSng(riga("qty"))
         End If
 
-        ' Giorni
+        ' Giorni ([int] = Long)
         If Not IsNull(riga("giorni")) And riga("giorni") <> "" Then
             rs("giorni") = CLng(riga("giorni"))
         End If
 
-        ' Listino (unit_price)
+        ' Listino ([money] = Currency)
         If Not IsNull(riga("unit_price")) And riga("unit_price") <> "" Then
             rs("Listino") = CCur(riga("unit_price"))
         End If
 
-        ' Importo (unit_price_net)
+        ' Importo ([money] = Currency)
         If Not IsNull(riga("unit_price_net")) And riga("unit_price_net") <> "" Then
             rs("Importo") = CCur(riga("unit_price_net"))
         End If
 
-        ' Sconto (discount_pct)
+        ' Sconto ([real] = Single)
         If Not IsNull(riga("discount_pct")) And riga("discount_pct") <> "" Then
-            rs("Sconto") = CDbl(riga("discount_pct"))
+            rs("Sconto") = CSng(riga("discount_pct"))
         End If
 
         ' Note articolo
