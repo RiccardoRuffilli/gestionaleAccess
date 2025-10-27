@@ -54,10 +54,48 @@ try {
         exit 1
     }
 
-    # Leggi e parsifica JSON (UTF-8)
+    # Leggi e parsifica JSON (UTF-8) - compatibile PowerShell 2.0
     Write-Log "Lettura file JSON..."
-    $jsonContent = Get-Content -Path $JsonFilePath -Raw -Encoding UTF8
-    $data = $jsonContent | ConvertFrom-Json
+
+    # Usa .NET per leggere il file in UTF-8
+    $jsonContent = [System.IO.File]::ReadAllText($JsonFilePath, [System.Text.Encoding]::UTF8)
+
+    # Parse JSON - verifica versione PowerShell
+    $psVersion = $PSVersionTable.PSVersion.Major
+    if ($psVersion -ge 3) {
+        # PowerShell 3.0+ ha ConvertFrom-Json
+        $data = $jsonContent | ConvertFrom-Json
+    } else {
+        # PowerShell 2.0 usa .NET JavaScriptSerializer
+        Add-Type -AssemblyName "System.Web.Extensions"
+        $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+        $serializer.MaxJsonLength = 104857600 # 100MB
+        $dataRaw = $serializer.DeserializeObject($jsonContent)
+
+        # Converti Hashtable in PSObject per compatibilita'
+        function ConvertTo-PSObject {
+            param($obj)
+
+            if ($obj -is [Hashtable]) {
+                $psObj = New-Object PSObject
+                foreach ($key in $obj.Keys) {
+                    $value = ConvertTo-PSObject $obj[$key]
+                    Add-Member -InputObject $psObj -MemberType NoteProperty -Name $key -Value $value
+                }
+                return $psObj
+            } elseif ($obj -is [Array] -or $obj -is [System.Collections.ArrayList]) {
+                $result = @()
+                foreach ($item in $obj) {
+                    $result += ConvertTo-PSObject $item
+                }
+                return ,$result
+            } else {
+                return $obj
+            }
+        }
+
+        $data = ConvertTo-PSObject $dataRaw
+    }
 
     # Verifica struttura JSON
     if (-not $data.evento) {

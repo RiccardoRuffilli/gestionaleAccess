@@ -29,9 +29,11 @@ if (-not (Test-Path $JsonFilePath)) {
 }
 
 try {
-    # Leggi file JSON
+    # Leggi file JSON (compatibile PowerShell 2.0)
     Write-Host "Lettura file JSON..." -ForegroundColor Yellow
-    $jsonContent = Get-Content -Path $JsonFilePath -Raw -Encoding UTF8
+
+    # Usa .NET per leggere il file in UTF-8 (compatibile con tutte le versioni PowerShell)
+    $jsonContent = [System.IO.File]::ReadAllText($JsonFilePath, [System.Text.Encoding]::UTF8)
 
     Write-Host "[OK] File letto correttamente" -ForegroundColor Green
     Write-Host "  Dimensione: $($jsonContent.Length) caratteri" -ForegroundColor Gray
@@ -39,7 +41,36 @@ try {
 
     # Parse JSON
     Write-Host "Parsing JSON..." -ForegroundColor Yellow
-    $data = $jsonContent | ConvertFrom-Json
+
+    # PowerShell 2.0 non ha ConvertFrom-Json, usa .NET JavaScriptSerializer
+    Add-Type -AssemblyName "System.Web.Extensions"
+    $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+    $serializer.MaxJsonLength = 104857600 # 100MB
+    $dataRaw = $serializer.DeserializeObject($jsonContent)
+
+    # Converti Hashtable in PSObject per compatibilita' con il resto del codice
+    function ConvertTo-PSObject {
+        param($obj)
+
+        if ($obj -is [Hashtable]) {
+            $psObj = New-Object PSObject
+            foreach ($key in $obj.Keys) {
+                $value = ConvertTo-PSObject $obj[$key]
+                Add-Member -InputObject $psObj -MemberType NoteProperty -Name $key -Value $value
+            }
+            return $psObj
+        } elseif ($obj -is [Array] -or $obj -is [System.Collections.ArrayList]) {
+            $result = @()
+            foreach ($item in $obj) {
+                $result += ConvertTo-PSObject $item
+            }
+            return ,$result  # La virgola previene l'unwrapping dell'array
+        } else {
+            return $obj
+        }
+    }
+
+    $data = ConvertTo-PSObject $dataRaw
 
     Write-Host "[OK] JSON parsato correttamente" -ForegroundColor Green
     Write-Host ""
