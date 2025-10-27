@@ -224,28 +224,20 @@ try {
     $existingId = $checkCmd.ExecuteScalar()
 
     if ($null -ne $existingId) {
-        Write-Log "Preventivo esistente trovato (ID: $existingId). Eliminazione in corso..." "WARN"
+        Write-Log "ERRORE: Preventivo esistente trovato con ID: $existingId" "ERROR"
+        Write-Log "ERRORE: Riferimento: $riferimentoBase" "ERROR"
+        Write-Log "" "ERROR"
+        Write-Log "Per sostituire questo preventivo:" "ERROR"
+        Write-Log "1. Eliminare il preventivo esistente dal gestionale Access" "ERROR"
+        Write-Log "2. Riprovare l'importazione" "ERROR"
+        Write-Log "" "ERROR"
+        Write-Log "Importazione ANNULLATA" "ERROR"
 
-        # Elimina record collegati
-        $delCmd = $connection.CreateCommand()
-
-        $delCmd.CommandText = "DELETE FROM [Tecnici preventivati] WHERE ID_preventivo = @id"
-        $delCmd.Parameters.AddWithValue("@id", $existingId) | Out-Null
-        $rowsDeleted = $delCmd.ExecuteNonQuery()
-        Write-Log "Eliminati $rowsDeleted record da Tecnici preventivati"
-
-        $delCmd.Parameters.Clear()
-        $delCmd.CommandText = "DELETE FROM [Servizi preventivati] WHERE ID_preventivo = @id"
-        $delCmd.Parameters.AddWithValue("@id", $existingId) | Out-Null
-        $rowsDeleted = $delCmd.ExecuteNonQuery()
-        Write-Log "Eliminati $rowsDeleted record da Servizi preventivati"
-
-        $delCmd.Parameters.Clear()
-        $delCmd.CommandText = "DELETE FROM preventivi WHERE ID_preventivo = @id"
-        $delCmd.Parameters.AddWithValue("@id", $existingId) | Out-Null
-        $delCmd.ExecuteNonQuery() | Out-Null
-        Write-Log "Preventivo esistente eliminato"
+        $connection.Close()
+        exit 1
     }
+
+    Write-Log "Nessun duplicato trovato, procedo con l'importazione"
 
     # Inizia transazione
     $transaction = $connection.BeginTransaction()
@@ -434,7 +426,7 @@ VALUES (
                 $servCmd.CommandText = @"
 INSERT INTO [Servizi preventivati] (
     ID_preventivo, ID_servizio, ordine,
-    quantità, giorni, Listino, Importo, Sconto, note_articolo
+    [quantità], giorni, Listino, Importo, Sconto, note_articolo
 )
 VALUES (
     @id_prev, @id_serv, @ordine,
