@@ -239,14 +239,20 @@ try {
         # INSERIMENTO PREVENTIVO
         # ==============================================================================
 
-        Write-Log "Inserimento preventivo..."
+        Write-Log "Inserimento preventivo con ID originale: $idOriginale"
+
+        # Abilita IDENTITY_INSERT per inserire l'ID originale
+        $identityCmd = $connection.CreateCommand()
+        $identityCmd.Transaction = $transaction
+        $identityCmd.CommandText = "SET IDENTITY_INSERT preventivi ON"
+        $identityCmd.ExecuteNonQuery() | Out-Null
 
         $insertCmd = $connection.CreateCommand()
         $insertCmd.Transaction = $transaction
 
         $insertCmd.CommandText = @"
 INSERT INTO preventivi (
-    ID_cliente, id_referente_videorent, Riferimento,
+    ID_preventivo, ID_cliente, id_referente_videorent, Riferimento,
     [Data allestimento], [Ora allestimento],
     [Data inizio], [Ora inizio],
     [Data fine], [Ora fine],
@@ -255,9 +261,8 @@ INSERT INTO preventivi (
     [sconto cliente], pagamento, gruppo,
     [Note location], Note, Note_fatturazione, [Accessori vari]
 )
-OUTPUT INSERTED.ID_preventivo
 VALUES (
-    @cliente_id, @responsabile_id, @riferimento,
+    @id_preventivo, @cliente_id, @responsabile_id, @riferimento,
     @data_allest, @ora_allest,
     @data_inizio, @ora_inizio,
     @data_fine, @ora_fine,
@@ -271,6 +276,8 @@ VALUES (
         # Parametri evento
         $e = $data.evento
 
+        # Usa l'ID originale dal gestionale online
+        $insertCmd.Parameters.AddWithValue("@id_preventivo", $idOriginale) | Out-Null
         $insertCmd.Parameters.AddWithValue("@cliente_id", (Get-SafeValue $e.cliente_id)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@responsabile_id", (Get-SafeValue $e.responsabile_id)) | Out-Null
 
@@ -302,43 +309,52 @@ VALUES (
         $insertCmd.Parameters.AddWithValue("@pagamento", (Get-SafeValue $e.pagamento)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@gruppo", (Get-SafeValue $e.gruppo)) | Out-Null
 
-        # Note location (aggregato)
+        # Note location (aggregato) - aggiungi spazio finale
         $noteLocation = ""
-        if ($e.location_id) { $noteLocation += "Location ID: $($e.location_id)" }
+        if ($e.location_id) { $noteLocation += "Location ID: $($e.location_id) " }
         if ($e.note_location) {
             if ($noteLocation) { $noteLocation += "`n" }
-            $noteLocation += $e.note_location
+            $noteLocation += $e.note_location + " "
         }
-        $insertCmd.Parameters.AddWithValue("@note_location", (Get-SafeValue $noteLocation)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@note_location", (Get-SafeValue $noteLocation.TrimEnd())) | Out-Null
 
-        # Note
-        $insertCmd.Parameters.AddWithValue("@note", (Get-SafeValue $e.note_cliente)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@note_fatt", (Get-SafeValue $e.note_fatturazione)) | Out-Null
+        # Note - aggiungi spazio finale per future concatenazioni
+        $noteClienteValue = if ($e.note_cliente) { $e.note_cliente + " " } else { $null }
+        $noteFattValue = if ($e.note_fatturazione) { $e.note_fatturazione + " " } else { $null }
 
-        # Accessori vari (aggregato)
+        $insertCmd.Parameters.AddWithValue("@note", (Get-SafeValue $noteClienteValue)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@note_fatt", (Get-SafeValue $noteFattValue)) | Out-Null
+
+        # Accessori vari (aggregato) - aggiungi spazio finale
         $accessori = ""
-        if ($e.nome_evento) { $accessori += "EVENTO: $($e.nome_evento)" }
+        if ($e.nome_evento) { $accessori += "EVENTO: $($e.nome_evento) " }
         if ($e.note_interne) {
             if ($accessori) { $accessori += "`n" }
-            $accessori += "Note interne: $($e.note_interne)"
+            $accessori += "Note interne: $($e.note_interne) "
         }
         if ($e.note_runner_arrivo) {
             if ($accessori) { $accessori += "`n" }
-            $accessori += "Runner arrivo: $($e.note_runner_arrivo)"
+            $accessori += "Runner arrivo: $($e.note_runner_arrivo) "
         }
         if ($e.note_runner_disallestimento) {
             if ($accessori) { $accessori += "`n" }
-            $accessori += "Runner disallestimento: $($e.note_runner_disallestimento)"
+            $accessori += "Runner disallestimento: $($e.note_runner_disallestimento) "
         }
         if ($e.note_scheda_lavoro) {
             if ($accessori) { $accessori += "`n" }
-            $accessori += "Scheda lavoro: $($e.note_scheda_lavoro)"
+            $accessori += "Scheda lavoro: $($e.note_scheda_lavoro) "
         }
-        $insertCmd.Parameters.AddWithValue("@accessori", (Get-SafeValue $accessori)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@accessori", (Get-SafeValue $accessori.TrimEnd())) | Out-Null
 
-        # Esegui e ottieni ID generato
-        $nuovoIDPreventivo = $insertCmd.ExecuteScalar()
-        Write-Log "Preventivo inserito con ID: $nuovoIDPreventivo"
+        # Esegui insert con ID esplicito
+        $insertCmd.ExecuteNonQuery() | Out-Null
+        $nuovoIDPreventivo = $idOriginale
+
+        # Disabilita IDENTITY_INSERT dopo l'inserimento
+        $identityCmd.CommandText = "SET IDENTITY_INSERT preventivi OFF"
+        $identityCmd.ExecuteNonQuery() | Out-Null
+
+        Write-Log "Preventivo inserito con ID: $nuovoIDPreventivo (ID originale mantenuto)"
 
         # ==============================================================================
         # INSERIMENTO PERSONALE

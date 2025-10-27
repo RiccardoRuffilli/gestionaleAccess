@@ -184,10 +184,6 @@ Public Sub Passo3_ImportazioneCompleta()
     Dim jsonPath As String
     Dim cartellaLavoro As String
     Dim psCommand As String
-    Dim sqlUser As String
-    Dim sqlPassword As String
-    Dim serverInstance As String
-    Dim databaseName As String
 
     On Error GoTo ErrorHandler
 
@@ -215,29 +211,6 @@ Public Sub Passo3_ImportazioneCompleta()
         Exit Sub
     End If
 
-    ' Richiedi credenziali SQL Server
-    serverInstance = InputBox("Inserisci il nome del server SQL Server:" & vbCrLf & vbCrLf & _
-                              "Esempio: LENOVO-01\SQLEXPRESS", _
-                              "Server SQL", "LENOVO-01\SQLEXPRESS")
-    If serverInstance = "" Then Exit Sub
-
-    databaseName = InputBox("Inserisci il nome del database:", _
-                            "Database", "Videorent-b")
-    If databaseName = "" Then Exit Sub
-
-    sqlUser = InputBox("Inserisci l'username SQL Server:" & vbCrLf & vbCrLf & _
-                       "(Lascia vuoto per usare autenticazione Windows)", _
-                       "Username SQL", "sa")
-
-    If sqlUser <> "" Then
-        sqlPassword = InputBox("Inserisci la password per l'utente '" & sqlUser & "':", _
-                               "Password SQL")
-        If sqlPassword = "" Then
-            MsgBox "Password richiesta per autenticazione SQL Server!", vbExclamation
-            Exit Sub
-        End If
-    End If
-
     ' Seleziona file JSON
     jsonPath = SelezionaFileJSON(cartellaLavoro)
     If jsonPath = "" Then
@@ -246,9 +219,8 @@ Public Sub Passo3_ImportazioneCompleta()
 
     ' Mostra messaggio
     MsgBox "PASSO 3: Importazione Completa" & vbCrLf & vbCrLf & _
-           "Server: " & serverInstance & vbCrLf & _
-           "Database: " & databaseName & vbCrLf & _
            "File JSON: " & Dir(jsonPath) & vbCrLf & vbCrLf & _
+           "Nota: Le credenziali SQL sono configurate nello script PowerShell" & vbCrLf & vbCrLf & _
            "Si aprirà una finestra PowerShell che mostrerà:" & vbCrLf & _
            "• Tutte le operazioni di importazione" & vbCrLf & _
            "• Eventuali errori che si verificano" & vbCrLf & _
@@ -256,18 +228,10 @@ Public Sub Passo3_ImportazioneCompleta()
            "La finestra rimarrà aperta - premi un tasto per chiuderla.", _
            vbInformation, "Importazione"
 
-    ' Crea comando PowerShell con pausa finale
+    ' Crea comando PowerShell con pausa finale (senza richiedere credenziali)
     psCommand = "powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -Command " & _
                 """cd '" & cartellaLavoro & "'; " & _
-                "& .\ImportaPreventivo.ps1 '" & jsonPath & "' " & _
-                "-ServerInstance '" & serverInstance & "' " & _
-                "-DatabaseName '" & databaseName & "'"
-
-    If sqlUser <> "" Then
-        psCommand = psCommand & " -SqlUser '" & sqlUser & "' -SqlPassword '" & sqlPassword & "'"
-    End If
-
-    psCommand = psCommand & "; " & _
+                "& .\ImportaPreventivo.ps1 '" & jsonPath & "'; " & _
                 "Write-Host ''; " & _
                 "Write-Host 'Premi un tasto per chiudere...' -ForegroundColor Yellow; " & _
                 "$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')" & """"
