@@ -217,27 +217,34 @@ try {
 
     # Verifica duplicati
     Write-Log "Verifica duplicati..."
-    $checkCmd = $connection.CreateCommand()
-    $checkCmd.CommandText = "SELECT ID_preventivo FROM preventivi WHERE Riferimento LIKE @rif + '%'"
-    $checkCmd.Parameters.AddWithValue("@rif", $riferimentoBase) | Out-Null
 
-    $existingId = $checkCmd.ExecuteScalar()
+    try {
+        $checkCmd = $connection.CreateCommand()
+        $checkCmd.CommandText = "SELECT ID_preventivo FROM preventivi WHERE Riferimento LIKE @rif + '%'"
+        $checkCmd.Parameters.AddWithValue("@rif", $riferimentoBase) | Out-Null
 
-    if ($null -ne $existingId) {
-        Write-Log "ERRORE: Preventivo esistente trovato con ID: $existingId" "ERROR"
-        Write-Log "ERRORE: Riferimento: $riferimentoBase" "ERROR"
-        Write-Log "" "ERROR"
-        Write-Log "Per sostituire questo preventivo:" "ERROR"
-        Write-Log "1. Eliminare il preventivo esistente dal gestionale Access" "ERROR"
-        Write-Log "2. Riprovare l'importazione" "ERROR"
-        Write-Log "" "ERROR"
-        Write-Log "Importazione ANNULLATA" "ERROR"
+        $existingId = $checkCmd.ExecuteScalar()
 
+        if ($null -ne $existingId) {
+            Write-Log "ERRORE: Preventivo esistente trovato con ID: $existingId" "ERROR"
+            Write-Log "ERRORE: Riferimento: $riferimentoBase" "ERROR"
+            Write-Log "" "ERROR"
+            Write-Log "Per sostituire questo preventivo:" "ERROR"
+            Write-Log "1. Eliminare il preventivo esistente dal gestionale Access" "ERROR"
+            Write-Log "2. Riprovare l'importazione" "ERROR"
+            Write-Log "" "ERROR"
+            Write-Log "Importazione ANNULLATA" "ERROR"
+
+            $connection.Close()
+            exit 1
+        }
+
+        Write-Log "Nessun duplicato trovato, procedo con l'importazione"
+    } catch {
+        Write-Log "ERRORE durante verifica duplicati: $($_.Exception.Message)" "ERROR"
         $connection.Close()
         exit 1
     }
-
-    Write-Log "Nessun duplicato trovato, procedo con l'importazione"
 
     # Inizia transazione
     $transaction = $connection.BeginTransaction()
