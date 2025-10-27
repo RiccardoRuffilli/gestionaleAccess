@@ -47,9 +47,9 @@ try {
     # ============================================================
     # REPORT DETTAGLIATO - SEZIONE EVENTO
     # ============================================================
-    Write-Host "╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║          DATI EVENTO (tabella: preventivi)               ║" -ForegroundColor Cyan
-    Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host "          DATI EVENTO (tabella: preventivi)                    " -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
 
     $e = $data.evento
@@ -72,10 +72,14 @@ try {
     Write-Host "Campi mappati:" -ForegroundColor Gray
     Write-Host "  - ID_cliente           = $($e.cliente_id)" -ForegroundColor DarkGray
     Write-Host "  - id_referente_videorent = $($e.responsabile_id)" -ForegroundColor DarkGray
-    Write-Host "  - Data inizio          = $(($e.data_ora_inizio -split ' ')[0])" -ForegroundColor DarkGray
-    Write-Host "  - Ora inizio           = $(($e.data_ora_inizio -split ' ')[1])" -ForegroundColor DarkGray
-    Write-Host "  - Data fine            = $(($e.data_ora_fine -split ' ')[0])" -ForegroundColor DarkGray
-    Write-Host "  - Ora fine             = $(($e.data_ora_fine -split ' ')[1])" -ForegroundColor DarkGray
+    if ($e.data_ora_inizio) {
+        Write-Host "  - Data inizio          = $(($e.data_ora_inizio -split ' ')[0])" -ForegroundColor DarkGray
+        Write-Host "  - Ora inizio           = $(($e.data_ora_inizio -split ' ')[1])" -ForegroundColor DarkGray
+    }
+    if ($e.data_ora_fine) {
+        Write-Host "  - Data fine            = $(($e.data_ora_fine -split ' ')[0])" -ForegroundColor DarkGray
+        Write-Host "  - Ora fine             = $(($e.data_ora_fine -split ' ')[1])" -ForegroundColor DarkGray
+    }
     Write-Host "  - luogo                = $($e.luogo)" -ForegroundColor DarkGray
     Write-Host "  - Confermato           = $(if ($e.flag_confermato -eq 1) { 'True' } else { 'False' })" -ForegroundColor DarkGray
     Write-Host "  - Data confermato      = $($e.data_conferma)" -ForegroundColor DarkGray
@@ -87,9 +91,9 @@ try {
     # ============================================================
     # REPORT DETTAGLIATO - SEZIONE PERSONALE
     # ============================================================
-    Write-Host "╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║      DATI PERSONALE (tabella: Tecnici preventivati)      ║" -ForegroundColor Cyan
-    Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host "      DATI PERSONALE (tabella: Tecnici preventivati)          " -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
 
     if ($data.personale -and $data.personale.Count -gt 0) {
@@ -109,7 +113,7 @@ try {
             Write-Host "Note:                $($persona.note)" -ForegroundColor White
             Write-Host ""
 
-            Write-Host "Verrà scritto in: Tecnici preventivati" -ForegroundColor Gray
+            Write-Host "Verra' scritto in: Tecnici preventivati" -ForegroundColor Gray
             Write-Host "  - id_tecnico       = $($persona.user_id)" -ForegroundColor DarkGray
             Write-Host "  - Data inizio      = $($persona.data_inizio)" -ForegroundColor DarkGray
             Write-Host "  - Data fine        = $($persona.data_fine)" -ForegroundColor DarkGray
@@ -130,9 +134,9 @@ try {
     # ============================================================
     # REPORT DETTAGLIATO - SEZIONE SERVIZI
     # ============================================================
-    Write-Host "╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║      DATI SERVIZI (tabella: Servizi preventivati)        ║" -ForegroundColor Cyan
-    Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host "      DATI SERVIZI (tabella: Servizi preventivati)            " -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
 
     if ($data.servizi -and $data.servizi.Count -gt 0) {
@@ -144,7 +148,7 @@ try {
             Write-Host "--- SERVIZIO #$counter ---" -ForegroundColor Yellow
             Write-Host "ID originale:            $($servizio.id)" -ForegroundColor White
             Write-Host "Item ID (articolo):      $($servizio.item_id)" -ForegroundColor White
-            Write-Host "Quantità:                $($servizio.qty)" -ForegroundColor White
+            Write-Host "Quantita':               $($servizio.qty)" -ForegroundColor White
             Write-Host "Prezzo unitario:         $($servizio.prezzo_unitario)" -ForegroundColor White
             Write-Host "Costo unitario:          $($servizio.costo_unitario)" -ForegroundColor White
             Write-Host "Sconto %:                $($servizio.sconto_percentuale)" -ForegroundColor White
@@ -154,21 +158,23 @@ try {
             Write-Host ""
 
             # Calcola totale
-            $subtotale = [decimal]$servizio.qty * [decimal]$servizio.prezzo_unitario
-            $sconto = $subtotale * ([decimal]$servizio.sconto_percentuale / 100)
-            $netto = $subtotale - $sconto
-            $iva = $netto * ([decimal]$servizio.iva_percentuale / 100)
-            $totale = $netto + $iva
+            if ($servizio.qty -and $servizio.prezzo_unitario) {
+                $subtotale = [decimal]$servizio.qty * [decimal]$servizio.prezzo_unitario
+                $sconto = $subtotale * ([decimal]$servizio.sconto_percentuale / 100)
+                $netto = $subtotale - $sconto
+                $iva = $netto * ([decimal]$servizio.iva_percentuale / 100)
+                $totale = $netto + $iva
 
-            Write-Host "Calcoli:" -ForegroundColor Gray
-            Write-Host "  Subtotale (qty × prezzo): $('{0:N2}' -f $subtotale) €" -ForegroundColor DarkGray
-            Write-Host "  Sconto:                   $('{0:N2}' -f $sconto) €" -ForegroundColor DarkGray
-            Write-Host "  Netto:                    $('{0:N2}' -f $netto) €" -ForegroundColor DarkGray
-            Write-Host "  IVA:                      $('{0:N2}' -f $iva) €" -ForegroundColor DarkGray
-            Write-Host "  Totale:                   $('{0:N2}' -f $totale) €" -ForegroundColor DarkGray
-            Write-Host ""
+                Write-Host "Calcoli:" -ForegroundColor Gray
+                Write-Host "  Subtotale (qty x prezzo): $('{0:N2}' -f $subtotale) EUR" -ForegroundColor DarkGray
+                Write-Host "  Sconto:                   $('{0:N2}' -f $sconto) EUR" -ForegroundColor DarkGray
+                Write-Host "  Netto:                    $('{0:N2}' -f $netto) EUR" -ForegroundColor DarkGray
+                Write-Host "  IVA:                      $('{0:N2}' -f $iva) EUR" -ForegroundColor DarkGray
+                Write-Host "  Totale:                   $('{0:N2}' -f $totale) EUR" -ForegroundColor DarkGray
+                Write-Host ""
+            }
 
-            Write-Host "Verrà scritto in: Servizi preventivati" -ForegroundColor Gray
+            Write-Host "Verra' scritto in: Servizi preventivati" -ForegroundColor Gray
             Write-Host "  - id_servizio      = $($servizio.item_id)" -ForegroundColor DarkGray
             Write-Host "  - Quantita         = $($servizio.qty)" -ForegroundColor DarkGray
             Write-Host "  - Prezzo_unitario  = $($servizio.prezzo_unitario)" -ForegroundColor DarkGray
@@ -190,9 +196,9 @@ try {
     # ============================================================
     # RIEPILOGO FINALE
     # ============================================================
-    Write-Host "╔═══════════════════════════════════════════════════════════╗" -ForegroundColor Green
-    Write-Host "║                    RIEPILOGO FINALE                       ║" -ForegroundColor Green
-    Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "================================================================" -ForegroundColor Green
+    Write-Host "                    RIEPILOGO FINALE                           " -ForegroundColor Green
+    Write-Host "================================================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "[OK] File JSON letto e parsato correttamente" -ForegroundColor Green
     Write-Host ""
@@ -201,7 +207,7 @@ try {
     Write-Host "  - $($data.personale.Count) record nella tabella 'Tecnici preventivati'" -ForegroundColor White
     Write-Host "  - $($data.servizi.Count) record nella tabella 'Servizi preventivati'" -ForegroundColor White
     Write-Host ""
-    Write-Host "Il preventivo verrà identificato con: Riferimento = 'EVENTO_$($e.id)'" -ForegroundColor Yellow
+    Write-Host "Il preventivo verra' identificato con: Riferimento = 'EVENTO_$($e.id)'" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "=== TEST COMPLETATO CON SUCCESSO ===" -ForegroundColor Green
 
