@@ -32,6 +32,76 @@ function Get-SafeValue {
     return $Value
 }
 
+function Get-SafeDateTime {
+    param([string]$DateTimeString)
+
+    if ([string]::IsNullOrEmpty($DateTimeString) -or $DateTimeString -eq "null") {
+        return [DBNull]::Value
+    }
+
+    try {
+        # Prova a parsare la data
+        $dt = [DateTime]::Parse($DateTimeString)
+        return $dt
+    } catch {
+        Write-Log "Errore parsing data: $DateTimeString - $_" "WARN"
+        return [DBNull]::Value
+    }
+}
+
+function Get-SafeDate {
+    param([string]$DateTimeString)
+
+    if ([string]::IsNullOrEmpty($DateTimeString) -or $DateTimeString -eq "null") {
+        return [DBNull]::Value
+    }
+
+    try {
+        # Prova a parsare e prendi solo la parte data
+        $dt = [DateTime]::Parse($DateTimeString)
+        return $dt.Date
+    } catch {
+        Write-Log "Errore parsing data: $DateTimeString - $_" "WARN"
+        return [DBNull]::Value
+    }
+}
+
+function Combine-DateTime {
+    param(
+        [string]$DateString,
+        [string]$TimeString
+    )
+
+    # Se mancano entrambi, ritorna DBNull
+    if (([string]::IsNullOrEmpty($DateString) -or $DateString -eq "null") -and
+        ([string]::IsNullOrEmpty($TimeString) -or $TimeString -eq "null")) {
+        return [DBNull]::Value
+    }
+
+    try {
+        # Se c'è solo la data, ritorna la data a mezzanotte
+        if ([string]::IsNullOrEmpty($TimeString) -or $TimeString -eq "null") {
+            $dt = [DateTime]::Parse($DateString)
+            return $dt.Date
+        }
+
+        # Se c'è solo l'ora, ritorna null (non possiamo creare un datetime senza data)
+        if ([string]::IsNullOrEmpty($DateString) -or $DateString -eq "null") {
+            return [DBNull]::Value
+        }
+
+        # Combina data e ora
+        $datepart = [DateTime]::Parse($DateString).Date
+        $timespan = [TimeSpan]::Parse($TimeString)
+        $combined = $datepart.Add($timespan)
+
+        return $combined
+    } catch {
+        Write-Log "Errore combinazione data/ora: $DateString + $TimeString - $_" "WARN"
+        return [DBNull]::Value
+    }
+}
+
 function Convert-ToBoolean {
     param([object]$Value)
 
@@ -211,15 +281,15 @@ VALUES (
         }
         $insertCmd.Parameters.AddWithValue("@riferimento", $riferimento) | Out-Null
 
-        # Date e ore
-        $insertCmd.Parameters.AddWithValue("@data_allest", (Get-SafeValue $e.data_ora_allestimento)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@ora_allest", (Get-SafeValue $e.data_ora_allestimento)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@data_inizio", (Get-SafeValue $e.data_ora_inizio)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@ora_inizio", (Get-SafeValue $e.data_ora_inizio)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@data_fine", (Get-SafeValue $e.data_ora_fine)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@ora_fine", (Get-SafeValue $e.data_ora_fine)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@data_disall", (Get-SafeValue $e.data_ora_disallestimento)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@ora_disall", (Get-SafeValue $e.data_ora_disallestimento)) | Out-Null
+        # Date e ore - converti stringhe in DateTime
+        $insertCmd.Parameters.AddWithValue("@data_allest", (Get-SafeDate $e.data_ora_allestimento)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@ora_allest", (Get-SafeDateTime $e.data_ora_allestimento)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@data_inizio", (Get-SafeDate $e.data_ora_inizio)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@ora_inizio", (Get-SafeDateTime $e.data_ora_inizio)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@data_fine", (Get-SafeDate $e.data_ora_fine)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@ora_fine", (Get-SafeDateTime $e.data_ora_fine)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@data_disall", (Get-SafeDate $e.data_ora_disallestimento)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@ora_disall", (Get-SafeDateTime $e.data_ora_disallestimento)) | Out-Null
 
         # Flag booleani
         $insertCmd.Parameters.AddWithValue("@confermato", (Convert-ToBoolean $e.flag_confermato)) | Out-Null
@@ -302,10 +372,13 @@ VALUES (
 
                 $persCmd.Parameters.AddWithValue("@id_prev", $nuovoIDPreventivo) | Out-Null
                 $persCmd.Parameters.AddWithValue("@id_tecnico", (Get-SafeValue $persona.user_id)) | Out-Null
-                $persCmd.Parameters.AddWithValue("@data_inizio", (Get-SafeValue $persona.data_inizio)) | Out-Null
-                $persCmd.Parameters.AddWithValue("@ora_inizio", (Get-SafeValue $persona.ora_inizio)) | Out-Null
-                $persCmd.Parameters.AddWithValue("@data_fine", (Get-SafeValue $persona.data_fine)) | Out-Null
-                $persCmd.Parameters.AddWithValue("@ora_fine", (Get-SafeValue $persona.ora_fine)) | Out-Null
+
+                # Date e ore per personale - combina data e ora separate
+                $persCmd.Parameters.AddWithValue("@data_inizio", (Get-SafeDate $persona.data_inizio)) | Out-Null
+                $persCmd.Parameters.AddWithValue("@ora_inizio", (Combine-DateTime $persona.data_inizio $persona.ora_inizio)) | Out-Null
+                $persCmd.Parameters.AddWithValue("@data_fine", (Get-SafeDate $persona.data_fine)) | Out-Null
+                $persCmd.Parameters.AddWithValue("@ora_fine", (Combine-DateTime $persona.data_fine $persona.ora_fine)) | Out-Null
+
                 $persCmd.Parameters.AddWithValue("@confermato", (Convert-ToBoolean $persona.confirmed)) | Out-Null
 
                 $persCmd.ExecuteNonQuery() | Out-Null
