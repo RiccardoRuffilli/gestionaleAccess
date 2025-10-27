@@ -111,6 +111,23 @@ function Convert-ToBoolean {
     return [int]$Value -ne 0
 }
 
+function Convert-PercentToDecimal {
+    param([object]$Value)
+
+    # Converte percentuale (12.00) in decimale (0.12)
+    if ($null -eq $Value -or $Value -eq "" -or $Value -eq "null") {
+        return [DBNull]::Value
+    }
+
+    try {
+        $decimal = [decimal]$Value / 100
+        return $decimal
+    } catch {
+        Write-Log "Errore conversione percentuale: $Value - $_" "WARN"
+        return [DBNull]::Value
+    }
+}
+
 # ==============================================================================
 # MAIN SCRIPT
 # ==============================================================================
@@ -432,7 +449,7 @@ VALUES (
                 $servCmd.Parameters.AddWithValue("@giorni", (Get-SafeValue $servizio.giorni)) | Out-Null
                 $servCmd.Parameters.AddWithValue("@listino", (Get-SafeValue $servizio.unit_price)) | Out-Null
                 $servCmd.Parameters.AddWithValue("@importo", (Get-SafeValue $servizio.unit_price_net)) | Out-Null
-                $servCmd.Parameters.AddWithValue("@sconto", (Get-SafeValue $servizio.discount_pct)) | Out-Null
+                $servCmd.Parameters.AddWithValue("@sconto", (Convert-PercentToDecimal $servizio.discount_pct)) | Out-Null
                 $servCmd.Parameters.AddWithValue("@note", (Get-SafeValue $servizio.note)) | Out-Null
 
                 $servCmd.ExecuteNonQuery() | Out-Null
