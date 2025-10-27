@@ -423,16 +423,13 @@ VALUES (
                 $servCmd = $connection.CreateCommand()
                 $servCmd.Transaction = $transaction
 
-                $servCmd.CommandText = @"
-INSERT INTO [Servizi preventivati] (
-    ID_preventivo, ID_servizio, ordine,
-    [quantità], giorni, Listino, Importo, Sconto, note_articolo
-)
-VALUES (
-    @id_prev, @id_serv, @ordine,
-    @qty, @giorni, @listino, @importo, @sconto, @note
-)
-"@
+                # Costruisci il nome del campo con encoding Unicode corretto
+                $quantitaField = "quantit" + [char]0x00E0  # à = U+00E0
+
+                $servCmd.CommandText = "INSERT INTO [Servizi preventivati] " +
+                    "(ID_preventivo, ID_servizio, ordine, " +
+                    "[$quantitaField], giorni, Listino, Importo, Sconto, note_articolo) " +
+                    "VALUES (@id_prev, @id_serv, @ordine, @qty, @giorni, @listino, @importo, @sconto, @note)"
 
                 $servCmd.Parameters.AddWithValue("@id_prev", $nuovoIDPreventivo) | Out-Null
                 $servCmd.Parameters.AddWithValue("@id_serv", (Get-SafeValue $servizio.item_id)) | Out-Null
