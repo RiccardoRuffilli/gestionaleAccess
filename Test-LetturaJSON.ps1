@@ -13,7 +13,7 @@ Write-Host ""
 
 # Verifica parametro
 if (-not $JsonFilePath) {
-    Write-Host "✗ ERRORE: Specificare il percorso del file JSON" -ForegroundColor Red
+    Write-Host "[ERRORE] Specificare il percorso del file JSON" -ForegroundColor Red
     Write-Host ""
     Write-Host "Uso: .\Test-LetturaJSON.ps1 <percorso-file-json>" -ForegroundColor Yellow
     exit 1
@@ -24,7 +24,7 @@ Write-Host ""
 
 # Verifica esistenza file
 if (-not (Test-Path $JsonFilePath)) {
-    Write-Host "✗ ERRORE: File non trovato!" -ForegroundColor Red
+    Write-Host "[ERRORE] File non trovato!" -ForegroundColor Red
     exit 1
 }
 
@@ -33,7 +33,7 @@ try {
     Write-Host "Lettura file JSON..." -ForegroundColor Yellow
     $jsonContent = Get-Content -Path $JsonFilePath -Raw -Encoding UTF8
 
-    Write-Host "✓ File letto correttamente" -ForegroundColor Green
+    Write-Host "[OK] File letto correttamente" -ForegroundColor Green
     Write-Host "  Dimensione: $($jsonContent.Length) caratteri" -ForegroundColor Gray
     Write-Host ""
 
@@ -41,7 +41,7 @@ try {
     Write-Host "Parsing JSON..." -ForegroundColor Yellow
     $data = $jsonContent | ConvertFrom-Json
 
-    Write-Host "✓ JSON parsato correttamente" -ForegroundColor Green
+    Write-Host "[OK] JSON parsato correttamente" -ForegroundColor Green
     Write-Host ""
 
     # ============================================================
@@ -194,7 +194,7 @@ try {
     Write-Host "║                    RIEPILOGO FINALE                       ║" -ForegroundColor Green
     Write-Host "╚═══════════════════════════════════════════════════════════╝" -ForegroundColor Green
     Write-Host ""
-    Write-Host "✓ File JSON letto e parsato correttamente" -ForegroundColor Green
+    Write-Host "[OK] File JSON letto e parsato correttamente" -ForegroundColor Green
     Write-Host ""
     Write-Host "Record da creare:" -ForegroundColor White
     Write-Host "  - 1 preventivo nella tabella 'preventivi'" -ForegroundColor White
@@ -209,7 +209,7 @@ try {
 
 } catch {
     Write-Host ""
-    Write-Host "✗ ERRORE DURANTE LA LETTURA!" -ForegroundColor Red
+    Write-Host "[ERRORE] ERRORE DURANTE LA LETTURA!" -ForegroundColor Red
     Write-Host ""
     Write-Host "Messaggio errore:" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red

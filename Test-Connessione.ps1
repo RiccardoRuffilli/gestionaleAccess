@@ -3,16 +3,30 @@
 # Script per testare la connessione al database SQL Server
 # ============================================================
 
+param(
+    [string]$ServerInstance = "LENOVO-01\SQLEXPRESS",
+    [string]$DatabaseName = "Videorent-b",
+    [string]$SqlUser = "",
+    [string]$SqlPassword = ""
+)
+
 Write-Host "=== TEST CONNESSIONE DATABASE ===" -ForegroundColor Cyan
 Write-Host ""
 
-# Configurazione connessione database
-$serverInstance = ".\SQLEXPRESS"
-$databaseName = "Videorent-b"
-$connectionString = "Server=$serverInstance;Database=$databaseName;Integrated Security=True;"
+# Costruisci connection string
+if ($SqlUser -and $SqlPassword) {
+    # SQL Server Authentication
+    $connectionString = "Server=$ServerInstance;Database=$DatabaseName;User Id=$SqlUser;Password=$SqlPassword;"
+    Write-Host "Modalita: SQL Server Authentication" -ForegroundColor Yellow
+    Write-Host "Utente: $SqlUser" -ForegroundColor Yellow
+} else {
+    # Windows Authentication
+    $connectionString = "Server=$ServerInstance;Database=$DatabaseName;Integrated Security=True;"
+    Write-Host "Modalita: Windows Authentication" -ForegroundColor Yellow
+}
 
-Write-Host "Server: $serverInstance" -ForegroundColor Yellow
-Write-Host "Database: $databaseName" -ForegroundColor Yellow
+Write-Host "Server: $ServerInstance" -ForegroundColor Yellow
+Write-Host "Database: $DatabaseName" -ForegroundColor Yellow
 Write-Host ""
 
 try {
@@ -28,7 +42,7 @@ try {
     # Apri connessione
     $connection.Open()
 
-    Write-Host "✓ CONNESSIONE RIUSCITA!" -ForegroundColor Green
+    Write-Host "[OK] CONNESSIONE RIUSCITA!" -ForegroundColor Green
     Write-Host ""
 
     # Test query per verificare accesso tabelle
@@ -48,7 +62,7 @@ try {
     Write-Host "  - Tabella 'Servizi preventivati': $countServizi record trovati" -ForegroundColor Gray
 
     Write-Host ""
-    Write-Host "✓ ACCESSO ALLE TABELLE VERIFICATO!" -ForegroundColor Green
+    Write-Host "[OK] ACCESSO ALLE TABELLE VERIFICATO!" -ForegroundColor Green
     Write-Host ""
 
     # Chiudi connessione
@@ -59,7 +73,7 @@ try {
 
 } catch {
     Write-Host ""
-    Write-Host "✗ ERRORE DURANTE IL TEST!" -ForegroundColor Red
+    Write-Host "[ERRORE] ERRORE DURANTE IL TEST!" -ForegroundColor Red
     Write-Host ""
     Write-Host "Messaggio errore:" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
@@ -70,10 +84,11 @@ try {
 
     # Suggerimenti
     Write-Host "POSSIBILI CAUSE:" -ForegroundColor Yellow
-    Write-Host "1. SQL Server Express non è avviato" -ForegroundColor Gray
-    Write-Host "2. Il nome dell'istanza non è '.\SQLEXPRESS'" -ForegroundColor Gray
-    Write-Host "3. Il database non si chiama 'Videorent-b'" -ForegroundColor Gray
-    Write-Host "4. L'utente Windows non ha permessi sul database" -ForegroundColor Gray
+    Write-Host "1. SQL Server Express non e' avviato" -ForegroundColor Gray
+    Write-Host "2. Il nome dell'istanza e' errato (attuale: $ServerInstance)" -ForegroundColor Gray
+    Write-Host "3. Il database non esiste o ha un nome diverso" -ForegroundColor Gray
+    Write-Host "4. Credenziali errate (username/password)" -ForegroundColor Gray
+    Write-Host "5. L'utente non ha permessi sul database" -ForegroundColor Gray
     Write-Host ""
 
     if ($connection -and $connection.State -eq 'Open') {

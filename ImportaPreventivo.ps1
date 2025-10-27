@@ -6,12 +6,12 @@
 
 param(
     [Parameter(Mandatory=$true)]
-    [string]$JsonFilePath
+    [string]$JsonFilePath,
+    [string]$ServerInstance = "LENOVO-01\SQLEXPRESS",
+    [string]$DatabaseName = "Videorent-b",
+    [string]$SqlUser = "",
+    [string]$SqlPassword = ""
 )
-
-# Configurazione connessione SQL Server
-$ServerInstance = ".\SQLEXPRESS"  # Modifica se necessario
-$DatabaseName = "Videorent-b"
 
 # ==============================================================================
 # FUNZIONI DI UTILITA'
@@ -72,7 +72,18 @@ try {
 
     # Connessione a SQL Server
     Write-Log "Connessione a SQL Server..."
-    $connectionString = "Server=$ServerInstance;Database=$DatabaseName;Integrated Security=True;"
+
+    # Costruisci connection string in base al tipo di autenticazione
+    if ($SqlUser -and $SqlPassword) {
+        # SQL Server Authentication
+        $connectionString = "Server=$ServerInstance;Database=$DatabaseName;User Id=$SqlUser;Password=$SqlPassword;"
+        Write-Log "Autenticazione: SQL Server (utente: $SqlUser)"
+    } else {
+        # Windows Authentication
+        $connectionString = "Server=$ServerInstance;Database=$DatabaseName;Integrated Security=True;"
+        Write-Log "Autenticazione: Windows"
+    }
+
     $connection = New-Object System.Data.SqlClient.SqlConnection
     $connection.ConnectionString = $connectionString
     $connection.Open()
