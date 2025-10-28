@@ -463,7 +463,7 @@ VALUES (
                     if ($servizio.tipo -eq "hdr") {
                         $idServizio = 543
                     } elseif ($servizio.tipo -eq "sub") {
-                        $idServizio = 1113
+                        $idServizio = 1300
                     }
                 }
                 $servCmd.Parameters.AddWithValue("@id_serv", (Get-SafeValue $idServizio)) | Out-Null
