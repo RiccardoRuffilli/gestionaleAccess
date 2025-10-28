@@ -49,6 +49,25 @@ function Get-SafeDateTime {
     }
 }
 
+function Get-SafeTime {
+    param([string]$DateTimeString)
+
+    # Estrae solo la componente oraria da un datetime
+    if ([string]::IsNullOrEmpty($DateTimeString) -or $DateTimeString -eq "null") {
+        return [DBNull]::Value
+    }
+
+    try {
+        # Prova a parsare il datetime e prendi solo TimeOfDay
+        $dt = [DateTime]::Parse($DateTimeString)
+        # Ritorna solo la parte oraria come datetime (data = 1900-01-01 con l'ora)
+        return [DateTime]::Parse("1900-01-01 " + $dt.ToString("HH:mm:ss"))
+    } catch {
+        Write-Log "Errore parsing ora: $DateTimeString - $_" "WARN"
+        return [DBNull]::Value
+    }
+}
+
 function Get-SafeDate {
     param([string]$DateTimeString)
 
@@ -297,22 +316,19 @@ VALUES (
         $insertCmd.Parameters.AddWithValue("@cliente_id", (Get-SafeValue $e.cliente_id)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@responsabile_id", (Get-SafeValue $e.responsabile_id)) | Out-Null
 
-        # Riferimento
-        $riferimento = $riferimentoBase
-        if ($e.referente_id) {
-            $riferimento += " - REF:$($e.referente_id)"
-        }
-        $insertCmd.Parameters.AddWithValue("@riferimento", $riferimento) | Out-Null
+        # Riferimento - usa responsabile_id dal JSON
+        $riferimento = if ($e.responsabile_id) { [string]$e.responsabile_id } else { "" }
+        $insertCmd.Parameters.AddWithValue("@riferimento", (Get-SafeValue $riferimento)) | Out-Null
 
         # Date e ore - converti stringhe in DateTime
         $insertCmd.Parameters.AddWithValue("@data_allest", (Get-SafeDate $e.data_ora_allestimento)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@ora_allest", (Get-SafeDateTime $e.data_ora_allestimento)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@ora_allest", (Get-SafeTime $e.data_ora_allestimento)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@data_inizio", (Get-SafeDate $e.data_ora_inizio)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@ora_inizio", (Get-SafeDateTime $e.data_ora_inizio)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@ora_inizio", (Get-SafeTime $e.data_ora_inizio)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@data_fine", (Get-SafeDate $e.data_ora_fine)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@ora_fine", (Get-SafeDateTime $e.data_ora_fine)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@ora_fine", (Get-SafeTime $e.data_ora_fine)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@data_disall", (Get-SafeDate $e.data_ora_disallestimento)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@ora_disall", (Get-SafeDateTime $e.data_ora_disallestimento)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@ora_disall", (Get-SafeTime $e.data_ora_disallestimento)) | Out-Null
 
         # Flag booleani
         $insertCmd.Parameters.AddWithValue("@confermato", (Convert-ToBoolean $e.flag_confermato)) | Out-Null
@@ -439,7 +455,19 @@ VALUES (
                     "VALUES (@id_prev, @id_serv, @ordine, @qty, @giorni, @listino, @importo, @sconto, @note)"
 
                 $servCmd.Parameters.AddWithValue("@id_prev", $nuovoIDPreventivo) | Out-Null
-                $servCmd.Parameters.AddWithValue("@id_serv", (Get-SafeValue $servizio.item_id)) | Out-Null
+
+                # Determina ID_servizio in base al tipo
+                $idServizio = $servizio.item_id
+                if (-not $idServizio -or $idServizio -eq "null" -or [string]::IsNullOrEmpty($idServizio)) {
+                    # Se item_id è null, usa valori speciali in base al tipo
+                    if ($servizio.tipo -eq "hdr") {
+                        $idServizio = 543
+                    } elseif ($servizio.tipo -eq "sub") {
+                        $idServizio = 1113
+                    }
+                }
+                $servCmd.Parameters.AddWithValue("@id_serv", (Get-SafeValue $idServizio)) | Out-Null
+
                 $servCmd.Parameters.AddWithValue("@ordine", (Get-SafeValue $servizio.ord)) | Out-Null
                 $servCmd.Parameters.AddWithValue("@qty", (Get-SafeValue $servizio.qty)) | Out-Null
                 $servCmd.Parameters.AddWithValue("@giorni", (Get-SafeValue $servizio.giorni)) | Out-Null
