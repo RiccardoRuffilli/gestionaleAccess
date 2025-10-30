@@ -348,10 +348,10 @@ VALUES (
         $insertCmd.Parameters.AddWithValue("@pagamento", (Get-SafeValue $e.pagamento)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@gruppo", (Get-SafeValue $e.gruppo)) | Out-Null
 
-        # Dati location - dai campi del JSON
-        $insertCmd.Parameters.AddWithValue("@location", (Get-SafeValue $e.location_name)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@citta", (Get-SafeValue $e.location_city)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@indirizzo_location", (Get-SafeValue $e.location_address)) | Out-Null
+        # Dati location - dall'oggetto location nel JSON
+        $insertCmd.Parameters.AddWithValue("@location", (Get-SafeValue $e.location.name)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@citta", (Get-SafeValue $e.location.city)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@indirizzo_location", (Get-SafeValue $e.location.address)) | Out-Null
 
         # Note location (aggregato) - aggiungi spazio finale
         $noteLocation = ""
