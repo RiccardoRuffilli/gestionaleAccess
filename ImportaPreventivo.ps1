@@ -288,22 +288,26 @@ try {
         $insertCmd.CommandText = @"
 INSERT INTO preventivi (
     ID_preventivo, ID_cliente, id_referente_videorent, Riferimento,
+    [Data Preventivo],
     [Data allestimento], [Ora allestimento],
     [Data inizio], [Ora inizio],
     [Data fine], [Ora fine],
     [Data disallestimento], [Ora disallestimento],
     Confermato, annullato, planner, Fatturato,
     [sconto cliente], pagamento, gruppo,
+    Location, [Città], [Indirizzo location],
     [Note location], Note, Note_fatturazione, [Accessori vari]
 )
 VALUES (
     @id_preventivo, @cliente_id, @responsabile_id, @riferimento,
+    @data_preventivo,
     @data_allest, @ora_allest,
     @data_inizio, @ora_inizio,
     @data_fine, @ora_fine,
     @data_disall, @ora_disall,
     @confermato, @annullato, @planner, @fatturato,
     @sconto, @pagamento, @gruppo,
+    @location, @citta, @indirizzo_location,
     @note_location, @note, @note_fatt, @accessori
 )
 "@
@@ -319,6 +323,9 @@ VALUES (
         # Riferimento - usa responsabile_id dal JSON
         $riferimento = if ($e.responsabile_id) { [string]$e.responsabile_id } else { "" }
         $insertCmd.Parameters.AddWithValue("@riferimento", (Get-SafeValue $riferimento)) | Out-Null
+
+        # Data Preventivo - dal campo created_at del JSON
+        $insertCmd.Parameters.AddWithValue("@data_preventivo", (Get-SafeDateTime $e.created_at)) | Out-Null
 
         # Date e ore - converti stringhe in DateTime
         $insertCmd.Parameters.AddWithValue("@data_allest", (Get-SafeDate $e.data_ora_allestimento)) | Out-Null
@@ -340,6 +347,11 @@ VALUES (
         $insertCmd.Parameters.AddWithValue("@sconto", (Get-SafeValue $e.sconto_cliente)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@pagamento", (Get-SafeValue $e.pagamento)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@gruppo", (Get-SafeValue $e.gruppo)) | Out-Null
+
+        # Dati location - dai campi del JSON
+        $insertCmd.Parameters.AddWithValue("@location", (Get-SafeValue $e.location_name)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@citta", (Get-SafeValue $e.location_city)) | Out-Null
+        $insertCmd.Parameters.AddWithValue("@indirizzo_location", (Get-SafeValue $e.location_address)) | Out-Null
 
         # Note location (aggregato) - aggiungi spazio finale
         $noteLocation = ""
