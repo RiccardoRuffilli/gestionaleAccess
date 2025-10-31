@@ -288,11 +288,11 @@ VALUES (
         # Usa l'ID originale dal gestionale online
         $insertCmd.Parameters.AddWithValue("@id_preventivo", $idOriginale) | Out-Null
         $insertCmd.Parameters.AddWithValue("@cliente_id", (Get-SafeValue $e.cliente_id)) | Out-Null
-        $insertCmd.Parameters.AddWithValue("@responsabile_id", (Get-SafeValue $e.responsabile_id)) | Out-Null
+        # Nota: responsabile_id non è più nel JSON, ora c'è solo il nome in $e.responsabile
+        $insertCmd.Parameters.AddWithValue("@responsabile_id", [DBNull]::Value) | Out-Null
 
-        # Riferimento - usa responsabile_id dal JSON
-        $riferimento = if ($e.responsabile_id) { [string]$e.responsabile_id } else { "" }
-        $insertCmd.Parameters.AddWithValue("@riferimento", (Get-SafeValue $riferimento)) | Out-Null
+        # Riferimento - usa referente dal JSON (campo stringa)
+        $insertCmd.Parameters.AddWithValue("@riferimento", (Get-SafeValue $e.referente)) | Out-Null
 
         # Data Preventivo - dal campo created_at del JSON
         $insertCmd.Parameters.AddWithValue("@data_preventivo", (Get-SafeDateTime $e.created_at)) | Out-Null
@@ -339,26 +339,39 @@ VALUES (
         $insertCmd.Parameters.AddWithValue("@note", (Get-SafeValue $noteClienteValue)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@note_fatt", (Get-SafeValue $noteFattValue)) | Out-Null
 
-        # Accessori vari (aggregato) - aggiungi spazio finale
+        # Accessori vari (aggregato) - con a capo tra ogni elemento
         $accessori = ""
-        if ($e.nome_evento) { $accessori += "EVENTO: $($e.nome_evento) " }
+
+        # Responsabile
+        if ($e.responsabile) {
+            $accessori += "Responsabile: $($e.responsabile)"
+        }
+
+        # Nome evento
+        if ($e.nome_evento) {
+            if ($accessori) { $accessori += "`n" }
+            $accessori += "EVENTO: $($e.nome_evento)"
+        }
+
+        # Note varie
         if ($e.note_interne) {
             if ($accessori) { $accessori += "`n" }
-            $accessori += "Note interne: $($e.note_interne) "
+            $accessori += "Note interne: $($e.note_interne)"
         }
         if ($e.note_runner_arrivo) {
             if ($accessori) { $accessori += "`n" }
-            $accessori += "Runner arrivo: $($e.note_runner_arrivo) "
+            $accessori += "Runner arrivo: $($e.note_runner_arrivo)"
         }
         if ($e.note_runner_disallestimento) {
             if ($accessori) { $accessori += "`n" }
-            $accessori += "Runner disallestimento: $($e.note_runner_disallestimento) "
+            $accessori += "Runner disallestimento: $($e.note_runner_disallestimento)"
         }
         if ($e.note_scheda_lavoro) {
             if ($accessori) { $accessori += "`n" }
-            $accessori += "Scheda lavoro: $($e.note_scheda_lavoro) "
+            $accessori += "Scheda lavoro: $($e.note_scheda_lavoro)"
         }
-        $insertCmd.Parameters.AddWithValue("@accessori", (Get-SafeValue $accessori.TrimEnd())) | Out-Null
+
+        $insertCmd.Parameters.AddWithValue("@accessori", (Get-SafeValue $accessori)) | Out-Null
 
         # Esegui insert con ID esplicito
         $insertCmd.ExecuteNonQuery() | Out-Null
@@ -415,6 +428,55 @@ VALUES (
             }
 
             Write-Log "Personale inserito"
+        }
+
+        # ==============================================================================
+        # INSERIMENTO FURGONI (come tecnici con ID 288)
+        # ==============================================================================
+
+        if ($data.furgoni -and $data.furgoni.Count -gt 0) {
+            Write-Log "Inserimento furgoni ($($data.furgoni.Count) record)..."
+
+            foreach ($furgone in $data.furgoni) {
+                $furgCmd = $connection.CreateCommand()
+                $furgCmd.Transaction = $transaction
+
+                $furgCmd.CommandText = @"
+INSERT INTO [Tecnici preventivati] (
+    ID_preventivo, ID_Tecnico,
+    data_allestimento_tecnico, ora_allestimento_tecnico,
+    data_inizio_tecnico, ora_inizio_tecnico,
+    data_fine_tecnico, ora_fine_tecnico,
+    data_disallestimento_tecnico, ora_disallestimento_tecnico,
+    [Conferma tecnico]
+)
+VALUES (
+    @id_prev, @id_tecnico,
+    @data_inizio, @ora_inizio,
+    @data_inizio, @ora_inizio,
+    @data_fine, @ora_fine,
+    @data_fine, @ora_fine,
+    @confermato
+)
+"@
+
+                $furgCmd.Parameters.AddWithValue("@id_prev", $nuovoIDPreventivo) | Out-Null
+                # Usa sempre ID 288 per i furgoni (tecnico fittizio)
+                $furgCmd.Parameters.AddWithValue("@id_tecnico", 288) | Out-Null
+
+                # Date e ore per furgoni - combina data e ora separate
+                $furgCmd.Parameters.AddWithValue("@data_inizio", (Get-SafeDate $furgone.data_inizio)) | Out-Null
+                $furgCmd.Parameters.AddWithValue("@ora_inizio", (Combine-DateTime $furgone.data_inizio $furgone.ora_inizio)) | Out-Null
+                $furgCmd.Parameters.AddWithValue("@data_fine", (Get-SafeDate $furgone.data_fine)) | Out-Null
+                $furgCmd.Parameters.AddWithValue("@ora_fine", (Combine-DateTime $furgone.data_fine $furgone.ora_fine)) | Out-Null
+
+                # I furgoni non hanno campo "confirmed", default a false
+                $furgCmd.Parameters.AddWithValue("@confermato", $false) | Out-Null
+
+                $furgCmd.ExecuteNonQuery() | Out-Null
+            }
+
+            Write-Log "Furgoni inseriti"
         }
 
         # ==============================================================================
