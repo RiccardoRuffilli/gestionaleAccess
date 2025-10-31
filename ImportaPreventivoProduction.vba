@@ -139,7 +139,7 @@ Private Function EseguiImportPowerShell(scriptPath As String, jsonPath As String
     ' Costruisci comando PowerShell che salva output su file
     psCommand = "powershell.exe -NoExit -NoProfile -ExecutionPolicy Bypass -Command " & _
                 """cd '" & CurrentProject.Path & "'; " & _
-                "& .\ImportaPreventivo.ps1 '" & jsonPath & "'" & replaceParam & " *>&1 | Tee-Object -FilePath '" & outputPath & "'; " & _
+                "& .\ImportaPreventivo.ps1 '" & jsonPath & "'" & replaceParam & " 2>&1 | Tee-Object -FilePath '" & outputPath & "'; " & _
                 "Write-Host ''; " & _
                 "Write-Host 'Premi un tasto per chiudere...' -ForegroundColor Yellow; " & _
                 "$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown'); " & _
