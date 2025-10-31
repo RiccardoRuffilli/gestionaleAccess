@@ -8,9 +8,9 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$JsonFilePath,
     [string]$ServerInstance = "LENOVO-01\SQLEXPRESS",
-    [string]$DatabaseName = "Videorent-b",
-    [string]$SqlUser = "",
-    [string]$SqlPassword = ""
+    [string]$DatabaseName = "Videorent",
+    [string]$SqlUser = "sa",
+    [string]$SqlPassword = "Video2009"
 )
 
 # ==============================================================================
