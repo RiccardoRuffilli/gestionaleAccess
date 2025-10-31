@@ -10,7 +10,8 @@ param(
     [string]$ServerInstance = "LENOVO-01\SQLEXPRESS",
     [string]$DatabaseName = "Videorent-b",
     [string]$SqlUser = "",
-    [string]$SqlPassword = ""
+    [string]$SqlPassword = "",
+    [switch]$ReplaceExisting = $false
 )
 
 # ==============================================================================
@@ -239,26 +240,72 @@ try {
 
     try {
         $checkCmd = $connection.CreateCommand()
-        $checkCmd.CommandText = "SELECT ID_preventivo FROM preventivi WHERE Riferimento LIKE @rif + '%'"
+        $checkCmd.CommandText = @"
+SELECT p.ID_preventivo,
+       c.Nome_azienda,
+       p.[Città],
+       p.[Data allestimento]
+FROM preventivi p
+LEFT JOIN [Anagrafica Clienti] c ON p.ID_cliente = c.ID_Cliente
+WHERE p.Riferimento LIKE @rif + '%'
+"@
         $checkCmd.Parameters.AddWithValue("@rif", $riferimentoBase) | Out-Null
 
-        $existingId = $checkCmd.ExecuteScalar()
+        $reader = $checkCmd.ExecuteReader()
 
-        if ($null -ne $existingId) {
-            Write-Log "ERRORE: Preventivo esistente trovato con ID: $existingId" "ERROR"
-            Write-Log "ERRORE: Riferimento: $riferimentoBase" "ERROR"
-            Write-Log "" "ERROR"
-            Write-Log "Per sostituire questo preventivo:" "ERROR"
-            Write-Log "1. Eliminare il preventivo esistente dal gestionale Access" "ERROR"
-            Write-Log "2. Riprovare l'importazione" "ERROR"
-            Write-Log "" "ERROR"
-            Write-Log "Importazione ANNULLATA" "ERROR"
+        if ($reader.Read()) {
+            # Preventivo esistente trovato
+            $existingId = $reader["ID_preventivo"]
+            $clienteName = if ($reader["Nome_azienda"] -ne [DBNull]::Value) { $reader["Nome_azienda"] } else { "Sconosciuto" }
+            $citta = if ($reader["Città"] -ne [DBNull]::Value) { $reader["Città"] } else { "" }
+            $dataAllestimento = if ($reader["Data allestimento"] -ne [DBNull]::Value) {
+                ([DateTime]$reader["Data allestimento"]).ToString("dd/MM/yyyy")
+            } else {
+                "Data non specificata"
+            }
+            $reader.Close()
 
-            $connection.Close()
-            exit 1
+            if (-not $ReplaceExisting) {
+                # Non è stato richiesto di sostituire - scrivi i dettagli e chiedi conferma
+                Write-Log "==================================="
+                Write-Log "DUPLICATO_TROVATO" "WARN"
+                Write-Log "ID:$existingId" "WARN"
+                Write-Log "CLIENTE:$clienteName" "WARN"
+                Write-Log "CITTA:$citta" "WARN"
+                Write-Log "DATA:$dataAllestimento" "WARN"
+                Write-Log "==================================="
+
+                $connection.Close()
+                exit 2  # Exit code 2 = duplicato trovato
+            } else {
+                # Eliminazione preventivo esistente richiesta
+                Write-Log "Preventivo esistente trovato (ID: $existingId)" "WARN"
+                Write-Log "Cliente: $clienteName, Città: $citta, Data allestimento: $dataAllestimento" "WARN"
+                Write-Log "Eliminazione preventivo in corso..." "WARN"
+
+                # Elimina prima i tecnici preventivati
+                $deleteCmd = $connection.CreateCommand()
+                $deleteCmd.CommandText = "DELETE FROM [Tecnici preventivati] WHERE ID_preventivo = @id"
+                $deleteCmd.Parameters.AddWithValue("@id", $existingId) | Out-Null
+                $tecDeleted = $deleteCmd.ExecuteNonQuery()
+                Write-Log "Eliminati $tecDeleted tecnici preventivati"
+
+                # Elimina i servizi preventivati
+                $deleteCmd.CommandText = "DELETE FROM [Servizi preventivati] WHERE ID_preventivo = @id"
+                $deleteServDeleted = $deleteCmd.ExecuteNonQuery()
+                Write-Log "Eliminati $deleteServDeleted servizi preventivati"
+
+                # Elimina il preventivo
+                $deleteCmd.CommandText = "DELETE FROM preventivi WHERE ID_preventivo = @id"
+                $deletePrevDeleted = $deleteCmd.ExecuteNonQuery()
+                Write-Log "Preventivo eliminato"
+
+                Write-Log "Preventivo esistente eliminato con successo, procedo con l'importazione del nuovo"
+            }
+        } else {
+            $reader.Close()
+            Write-Log "Nessun duplicato trovato, procedo con l'importazione"
         }
-
-        Write-Log "Nessun duplicato trovato, procedo con l'importazione"
     } catch {
         Write-Log "ERRORE durante verifica duplicati: $($_.Exception.Message)" "ERROR"
         $connection.Close()
