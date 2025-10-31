@@ -323,18 +323,20 @@ VALUES (
         $insertCmd.Parameters.AddWithValue("@citta", (Get-SafeValue $e.location.city)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@indirizzo_location", (Get-SafeValue $e.location.address)) | Out-Null
 
-        # Note location (aggregato) - aggiungi spazio finale
+        # Note location (aggregato) - con a capo finale
         $noteLocation = ""
-        if ($e.location_id) { $noteLocation += "Location ID: $($e.location_id) " }
+        if ($e.location_id) { $noteLocation += "Location ID: $($e.location_id)" }
         if ($e.note_location) {
             if ($noteLocation) { $noteLocation += "`n" }
-            $noteLocation += $e.note_location + " "
+            $noteLocation += $e.note_location
         }
-        $insertCmd.Parameters.AddWithValue("@note_location", (Get-SafeValue $noteLocation.TrimEnd())) | Out-Null
+        # Aggiungi a capo finale se non vuoto
+        if ($noteLocation) { $noteLocation += "`n" }
+        $insertCmd.Parameters.AddWithValue("@note_location", (Get-SafeValue $noteLocation)) | Out-Null
 
-        # Note - aggiungi spazio finale per future concatenazioni
-        $noteClienteValue = if ($e.note_cliente) { $e.note_cliente + " " } else { $null }
-        $noteFattValue = if ($e.note_fatturazione) { $e.note_fatturazione + " " } else { $null }
+        # Note - con a capo finale per future concatenazioni
+        $noteClienteValue = if ($e.note_cliente) { $e.note_cliente + "`n" } else { $null }
+        $noteFattValue = if ($e.note_fatturazione) { $e.note_fatturazione + "`n" } else { $null }
 
         $insertCmd.Parameters.AddWithValue("@note", (Get-SafeValue $noteClienteValue)) | Out-Null
         $insertCmd.Parameters.AddWithValue("@note_fatt", (Get-SafeValue $noteFattValue)) | Out-Null
@@ -370,6 +372,9 @@ VALUES (
             if ($accessori) { $accessori += "`n" }
             $accessori += "Scheda lavoro: $($e.note_scheda_lavoro)"
         }
+
+        # Aggiungi a capo finale se non vuoto
+        if ($accessori) { $accessori += "`n" }
 
         $insertCmd.Parameters.AddWithValue("@accessori", (Get-SafeValue $accessori)) | Out-Null
 
